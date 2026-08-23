@@ -1,25 +1,29 @@
 import * as cheerio from "cheerio";
 import {
   buildPlayer,
+  canonicalTeamName,
   chunk,
   decodeEntities,
   emptyStats,
+  FRANCHISE_TEAM_NAMES,
   headerMap,
   isStatsList,
   statsFromRow,
   teamNameFromRosterTitle,
   toNumber,
+  uniqueTeamAliases,
   yearFromStatsList
 } from "./lib/stats.js";
 import { careerFromSeasons, collectCareerAppearances, extractSourceId } from "./lib/profile.js";
 import { listFingerprint, readCacheFile, writeCacheFile } from "./lib/cache.js";
-import { hydrateScheduleGames, parseScheduleEvent, type ScheduleGame } from "./lib/schedule.js";
+import { hydrateScheduleGames, mapEventLineup, parseScheduleEvent, type ScheduleGame } from "./lib/schedule.js";
 import { parseStandingsTable, standingsSlugCandidates, type TeamStanding } from "./lib/standings.js";
 import type { Player, PlayersResponse, SeasonInfo } from "./types.js";
 
 const SITE_ORIGIN = new URL(process.env.TUFF_STATS_URL ?? "https://www.playtuff.ca/list/2026-tuff-stats/").origin;
 const DEFAULT_SEASON = "2026";
 const LIST_META_FIELDS = "id,slug,title,seasons,link,modified,modified_gmt";
+const TEAM_ENRICHMENT_VERSION = "3";
 
 type SpList = {
   id: number;
@@ -292,8 +296,8 @@ async function loadSeasonRosterTeams(season: SeasonInfo): Promise<Map<number, st
   });
 
   const slugs = new Set(rosterLists.map((list) => list.slug.toLowerCase()));
-  // Modern seasons publish predictable roster slugs; fill gaps if the index call was truncated/rate-limited.
-  if (Number(season.year) >= 2022) {
+  // Fill gaps when the year has roster lists but the index call was truncated.
+  if (Number(season.year) >= 2022 && rosterLists.length) {
     for (const team of MODERN_TEAM_SLUGS) {
       slugs.add(`${season.year}-${team}`);
     }
@@ -306,17 +310,19 @@ async function loadSeasonRosterTeams(season: SeasonInfo): Promise<Map<number, st
     await Promise.all(
       group.map(async (slug) => {
         const fromIndex = rosterLists.find((list) => list.slug.toLowerCase() === slug);
-        const data =
-          fromIndex?.data ??
-          (
-            await fetchJson<SpList[]>(
-              `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?slug=${encodeURIComponent(slug)}&per_page=1`,
-              15000
-            )
-          )?.[0]?.data;
+        const payload =
+          fromIndex?.data
+            ? fromIndex
+            : (
+                await fetchJson<SpList[]>(
+                  `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?slug=${encodeURIComponent(slug)}&per_page=1&_fields=id,slug,title,data`,
+                  15000
+                )
+              )?.[0];
+        const data = payload?.data;
         if (!data) return;
 
-        const title = fromIndex?.title?.rendered ?? slug;
+        const title = payload?.title?.rendered ?? fromIndex?.title?.rendered ?? slug;
         const teamName = teamNameFromRosterTitle(title, season.year);
         if (!teamName) return;
 
@@ -332,22 +338,46 @@ async function loadSeasonRosterTeams(season: SeasonInfo): Promise<Map<number, st
   return map;
 }
 
-async function loadCurrentTeamsFallback(playerIds: number[]): Promise<Map<number, string>> {
+async function loadSeasonEventTeams(
+  season: SeasonInfo,
+  teamNames: Map<number, string>
+): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const seasonId = season.seasonId ?? (await resolveSeasonTaxonomyId(season.year));
+  if (!seasonId) return map;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = await fetchJson<Array<{ teams?: number[]; players?: number[] }>>(
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/events?seasons=${seasonId}&per_page=50&page=${page}&orderby=date&order=asc&_fields=teams,players`,
+      20000
+    );
+    if (!batch?.length) break;
+
+    for (const event of batch) {
+      const teamIds = (event.teams ?? []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+      const playerIds = (event.players ?? []).map((id) => Number(id)).filter((id) => Number.isFinite(id));
+      for (const { playerId, team } of mapEventLineup(teamIds, playerIds, teamNames)) {
+        map.set(playerId, team);
+      }
+    }
+
+    if (batch.length < 50) break;
+  }
+
+  return map;
+}
+
+async function loadCurrentTeamsFallback(
+  playerIds: number[],
+  teamNames: Map<number, string>
+): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (!playerIds.length) return map;
 
-  const teams = await fetchJson<Array<{ id: number; title?: { rendered?: string } }>>(
-    `${SITE_ORIGIN}/wp-json/sportspress/v2/teams?per_page=100`
-  );
-  const teamNames = new Map<number, string>();
-  for (const team of teams ?? []) {
-    const name = decodeEntities(team.title?.rendered ?? "").trim();
-    if (name) teamNames.set(team.id, name);
-  }
-
-  for (const group of chunk(playerIds, 40)) {
+  for (const group of chunk(playerIds, 50)) {
     const players = await fetchJson<Array<{ id: number; current_teams?: number[]; teams?: number[] }>>(
-      `${SITE_ORIGIN}/wp-json/sportspress/v2/players?include=${group.join(",")}&per_page=${group.length}`
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/players?include=${group.join(",")}&per_page=${group.length}&_fields=id,current_teams,teams`,
+      20000
     );
     for (const player of players ?? []) {
       const teamId = player.current_teams?.[0] ?? player.teams?.filter((id) => id > 0).at(-1);
@@ -359,25 +389,46 @@ async function loadCurrentTeamsFallback(playerIds: number[]): Promise<Map<number
   return map;
 }
 
+function mergeTeamMap(target: Map<number, string>, extra: Map<number, string>) {
+  for (const [id, team] of extra) {
+    if (!target.has(id)) target.set(id, team);
+  }
+}
+
 async function enrichPlayersWithTeams(players: Player[], season: SeasonInfo): Promise<Player[]> {
   const sourceIds = players
     .map((player) => Number(player.sourceId))
     .filter((id) => Number.isFinite(id) && id > 0);
 
-  const rosterTeams = await loadSeasonRosterTeams(season);
+  const [rosterTeams, standings, teamNames] = await Promise.all([
+    loadSeasonRosterTeams(season),
+    getStandings(false, season.year),
+    loadTeamNameMap()
+  ]);
+
+  const aliases = uniqueTeamAliases(
+    standings.map((row) => row.name),
+    teamNames.values(),
+    FRANCHISE_TEAM_NAMES
+  );
+
+  const missingAfterRoster = sourceIds.filter((id) => !rosterTeams.has(id));
+  if (missingAfterRoster.length) {
+    mergeTeamMap(rosterTeams, await loadSeasonEventTeams(season, teamNames));
+  }
 
   // Only fall back to "current team" for the live season — historical rosters are the source of truth.
   if (season.year === DEFAULT_SEASON) {
     const missing = sourceIds.filter((id) => !rosterTeams.has(id));
     if (missing.length) {
-      const fallback = await loadCurrentTeamsFallback(missing);
-      for (const [id, team] of fallback) rosterTeams.set(id, team);
+      mergeTeamMap(rosterTeams, await loadCurrentTeamsFallback(missing, teamNames));
     }
   }
 
   return players.map((player) => {
     const sourceId = Number(player.sourceId);
-    const team = Number.isFinite(sourceId) ? rosterTeams.get(sourceId) : undefined;
+    const raw = Number.isFinite(sourceId) ? rosterTeams.get(sourceId) : undefined;
+    const team = raw ? canonicalTeamName(raw, aliases) : undefined;
     return team ? { ...player, team } : player;
   });
 }
@@ -474,7 +525,7 @@ async function getSeasonFingerprint(season: SeasonInfo): Promise<string | null> 
     rosterMetas = [];
   }
 
-  return listFingerprint([statsMeta, ...rosterMetas]);
+  return `${listFingerprint([statsMeta, ...rosterMetas])}|te:${TEAM_ENRICHMENT_VERSION}`;
 }
 
 function seasonCacheName(year: string) {
@@ -518,10 +569,11 @@ async function fetchSeasonPlayers(season: SeasonInfo): Promise<PlayersResponse> 
   }
 
   players = await enrichPlayersWithTeams(players, season);
-  const teams = [...new Set(players.map((player) => player.team).filter((team): team is string => Boolean(team)))].sort((a, b) =>
-    a.localeCompare(b)
-  );
   const standings = await getStandings(false, season.year);
+  const teams = uniqueTeamAliases(
+    players.map((player) => player.team ?? ""),
+    standings.map((row) => canonicalTeamName(row.name))
+  ).sort((a, b) => a.localeCompare(b));
 
   return {
     players,
@@ -919,14 +971,19 @@ export async function refreshSeasonData(seasonYear?: string) {
 async function loadTeamNameMap(): Promise<Map<number, string>> {
   if (teamNamesMemory?.size) return teamNamesMemory;
 
-  const teams = await fetchJson<Array<{ id: number; title?: { rendered?: string } }>>(
-    `${SITE_ORIGIN}/wp-json/sportspress/v2/teams?per_page=100`
-  );
   const map = new Map<number, string>();
-  for (const team of teams ?? []) {
-    const id = Number(team.id);
-    const name = decodeEntities(team.title?.rendered ?? "").trim();
-    if (Number.isFinite(id) && name) map.set(id, name);
+  for (let page = 1; page <= 5; page += 1) {
+    const teams = await fetchJson<Array<{ id: number; title?: { rendered?: string } }>>(
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/teams?per_page=100&page=${page}&_fields=id,title`,
+      15000
+    );
+    if (!teams?.length) break;
+    for (const team of teams) {
+      const id = Number(team.id);
+      const name = decodeEntities(team.title?.rendered ?? "").trim();
+      if (Number.isFinite(id) && name) map.set(id, name);
+    }
+    if (teams.length < 100) break;
   }
   if (map.size) teamNamesMemory = map;
   return map;

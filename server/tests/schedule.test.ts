@@ -1,4 +1,4 @@
-import { hydrateScheduleGames, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
+import { hydrateScheduleGames, mapEventLineup, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
 
 describe("parseScheduleEvent", () => {
   const teams = new Map([
@@ -100,6 +100,27 @@ describe("hydrateScheduleGames", () => {
       ])
     );
     expect(hydrated[0]?.teams.map((side) => side.name)).toEqual(["Knights", "Rhinos"]);
+  });
+});
+
+describe("mapEventLineup", () => {
+  it("splits SportsPress 0-delimited lineups onto each team", () => {
+    const names = new Map([
+      [6258, "Cobras"],
+      [118, "Wildcats"]
+    ]);
+    const rows = mapEventLineup(
+      [6258, 118],
+      [0, 5511, 4885, 0, 7585, 7593, 7586],
+      names
+    );
+    expect(rows).toEqual([
+      { playerId: 5511, team: "Cobras" },
+      { playerId: 4885, team: "Cobras" },
+      { playerId: 7585, team: "Wildcats" },
+      { playerId: 7593, team: "Wildcats" },
+      { playerId: 7586, team: "Wildcats" }
+    ]);
   });
 });
 

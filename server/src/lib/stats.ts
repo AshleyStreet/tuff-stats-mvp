@@ -131,6 +131,56 @@ export function buildPlayer(
   };
 }
 
+export const FRANCHISE_TEAM_NAMES = [
+  "Brawlers",
+  "Bulldogs",
+  "Cobras",
+  "Knights",
+  "Lumberjacks",
+  "Menace",
+  "Rhinos",
+  "Sirens",
+  "Stallions",
+  "Storm Crows",
+  "Wildcats",
+  "Wolfhounds",
+  "Yetis"
+];
+
+export function uniqueTeamAliases(...groups: Array<Iterable<string>>): string[] {
+  const seen = new Set<string>();
+  const aliases: string[] = [];
+  for (const group of groups) {
+    for (const name of group) {
+      const trimmed = name.replace(/\s+/g, " ").trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || seen.has(key)) continue;
+      seen.add(key);
+      aliases.push(trimmed);
+    }
+  }
+  return aliases;
+}
+
+/** Collapse sponsor prefixes ("Woody's Wildcats") onto standings nicknames ("Wildcats"). */
+export function canonicalTeamName(raw: string, aliases: string[] = FRANCHISE_TEAM_NAMES): string {
+  const name = raw.replace(/\s+/g, " ").trim();
+  if (!name) return name;
+  const lower = name.toLowerCase();
+
+  const exact = aliases.find((alias) => alias.toLowerCase() === lower);
+  if (exact) return exact;
+
+  const suffixHits = aliases
+    .filter((alias) => {
+      const a = alias.toLowerCase();
+      if (a.length < 4) return false;
+      return lower.endsWith(` ${a}`) || lower === `the ${a}`;
+    })
+    .sort((a, b) => b.length - a.length);
+  return suffixHits[0] ?? name;
+}
+
 export function teamNameFromRosterTitle(title: string, year: string) {
   const decoded = decodeEntities(title).trim();
   const withoutYear = decoded.replace(new RegExp(`^${year}[\\s-]+`, "i"), "").trim();

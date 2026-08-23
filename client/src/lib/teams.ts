@@ -12,6 +12,62 @@ export type TeamSummary = {
   topScorer?: Player;
 };
 
+const FRANCHISE_TEAM_NAMES = [
+  "Brawlers",
+  "Bulldogs",
+  "Cobras",
+  "Knights",
+  "Lumberjacks",
+  "Menace",
+  "Rhinos",
+  "Sirens",
+  "Stallions",
+  "Storm Crows",
+  "Wildcats",
+  "Wolfhounds",
+  "Yetis"
+];
+
+export function canonicalTeamName(raw: string, aliases: string[] = FRANCHISE_TEAM_NAMES): string {
+  const name = raw.replace(/\s+/g, " ").trim();
+  if (!name) return name;
+  const lower = name.toLowerCase();
+
+  const exact = aliases.find((alias) => alias.toLowerCase() === lower);
+  if (exact) return exact;
+
+  const suffixHits = aliases
+    .filter((alias) => {
+      const a = alias.toLowerCase();
+      if (a.length < 4) return false;
+      return lower.endsWith(` ${a}`) || lower === `the ${a}`;
+    })
+    .sort((a, b) => b.length - a.length);
+  return suffixHits[0] ?? name;
+}
+
+function teamAliases(standings: TeamStanding[]): string[] {
+  const seen = new Set<string>();
+  const aliases: string[] = [];
+  for (const name of [...standings.map((row) => row.name), ...FRANCHISE_TEAM_NAMES]) {
+    const trimmed = name.replace(/\s+/g, " ").trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    aliases.push(trimmed);
+  }
+  return aliases;
+}
+
+export function withCanonicalTeams(players: Player[], standings: TeamStanding[] = []): Player[] {
+  const aliases = teamAliases(standings);
+  return players.map((player) => {
+    if (!player.team) return player;
+    const team = canonicalTeamName(player.team, aliases);
+    return team === player.team ? player : { ...player, team };
+  });
+}
+
 function blankStats(): Stats {
   return {
     gms: 0, tpqb: 0, tpnqb: 0, paTD: 0, ruTD: 0, recTD: 0, retTD: 0,
@@ -29,20 +85,25 @@ function sumStats(left: Stats, right: Stats): Stats {
 }
 
 export function buildTeamSummaries(players: Player[], standings: TeamStanding[] = []): TeamSummary[] {
+  const aliases = teamAliases(standings);
   const byTeam = new Map<string, Player[]>();
   for (const player of players) {
-    const name = player.team?.trim();
-    if (!name) continue;
+    const raw = player.team?.trim();
+    if (!raw) continue;
+    const name = canonicalTeamName(raw, aliases);
     const list = byTeam.get(name) ?? [];
     list.push(player);
     byTeam.set(name, list);
   }
 
-  const standingByName = new Map(standings.map((row) => [row.name.toLowerCase(), row]));
+  const standingByName = new Map(
+    standings.map((row) => [canonicalTeamName(row.name, aliases).toLowerCase(), row])
+  );
 
   // Include standings-only teams (no roster stats yet) so W-L still shows.
   for (const row of standings) {
-    if (!byTeam.has(row.name)) byTeam.set(row.name, []);
+    const name = canonicalTeamName(row.name, aliases);
+    if (!byTeam.has(name)) byTeam.set(name, []);
   }
 
   return [...byTeam.entries()]
