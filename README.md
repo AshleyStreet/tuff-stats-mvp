@@ -68,6 +68,8 @@ npm start
 
 Then open http://localhost:4000
 
+Season selector covers available TUFF/TGFL stats lists (currently 2019–2026). Teams for each season come from that year’s roster lists.
+
 ## Production note
 
 This is intentionally an MVP. Before making it a public production service, confirm TUFF is happy with the data being republished and add stronger caching / persistence if traffic grows.

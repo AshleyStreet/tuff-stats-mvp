@@ -19,6 +19,12 @@ export interface Player {
   };
 }
 
+export interface SeasonInfo {
+  year: string;
+  label: string;
+  slug: string;
+}
+
 export interface PlayersResponse {
   players: Player[];
   meta: {
@@ -26,5 +32,7 @@ export interface PlayersResponse {
     fetchedAt: string;
     total: number;
     teams: string[];
+    season: string;
+    seasonLabel: string;
   };
 }

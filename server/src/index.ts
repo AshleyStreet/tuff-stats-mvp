@@ -4,7 +4,8 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getPlayers } from "./source.js";
+import { filterAndSortPlayers } from "./lib/query.js";
+import { getPlayers, getSeasons } from "./source.js";
 import type { StatKey } from "./types.js";
 
 const app = express();
@@ -19,26 +20,25 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "tuff-stats-api" });
 });
 
+app.get("/api/seasons", async (req, res) => {
+  try {
+    const seasons = await getSeasons(req.query.refresh === "1");
+    res.json({ seasons, defaultSeason: seasons[0]?.year ?? "2026" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    res.status(502).json({ error: "Unable to load TUFF seasons", detail: message });
+  }
+});
+
 app.get("/api/players", async (req, res) => {
   try {
-    const data = await getPlayers(req.query.refresh === "1");
-    const search = String(req.query.search ?? "").trim().toLowerCase();
-    const team = String(req.query.team ?? "").trim().toLowerCase();
-    const sort = String(req.query.sort ?? "totalPoints") as StatKey | "totalPoints";
-    const order = req.query.order === "asc" ? 1 : -1;
-
-    let players = [...data.players];
-    if (team) {
-      players = players.filter((player) => (player.team ?? "").toLowerCase() === team);
-    }
-    if (search) {
-      players = players.filter((player) => player.name.toLowerCase().includes(search));
-    }
-
-    players.sort((a, b) => {
-      const aValue = sort === "totalPoints" ? a.derived.totalPoints : a.stats[sort] ?? 0;
-      const bValue = sort === "totalPoints" ? b.derived.totalPoints : b.stats[sort] ?? 0;
-      return (aValue - bValue) * order || a.name.localeCompare(b.name);
+    const season = String(req.query.season ?? "").trim();
+    const data = await getPlayers(req.query.refresh === "1", season || undefined);
+    const players = filterAndSortPlayers(data.players, {
+      search: String(req.query.search ?? ""),
+      team: String(req.query.team ?? ""),
+      sort: String(req.query.sort ?? "totalPoints") as StatKey | "totalPoints",
+      order: req.query.order === "asc" ? "asc" : "desc"
     });
 
     res.json({ ...data, players, meta: { ...data.meta, total: players.length } });
@@ -50,7 +50,8 @@ app.get("/api/players", async (req, res) => {
 
 app.get("/api/players/:id", async (req, res) => {
   try {
-    const data = await getPlayers();
+    const season = String(req.query.season ?? "").trim();
+    const data = await getPlayers(false, season || undefined);
     const player = data.players.find((candidate) => candidate.id === req.params.id);
     if (!player) return res.status(404).json({ error: "Player not found" });
     return res.json(player);
@@ -62,7 +63,8 @@ app.get("/api/players/:id", async (req, res) => {
 
 app.get("/api/leaders", async (req, res) => {
   try {
-    const data = await getPlayers();
+    const season = String(req.query.season ?? "").trim();
+    const data = await getPlayers(false, season || undefined);
     const stat = String(req.query.stat ?? "recTD") as StatKey;
     const limit = Math.min(Math.max(Number(req.query.limit ?? 5), 1), 50);
     const leaders = [...data.players]

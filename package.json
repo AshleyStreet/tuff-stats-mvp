@@ -10,7 +10,8 @@
     "dev": "concurrently -n API,WEB -c auto \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix server && npm run build --prefix client",
     "start": "npm run start --prefix server",
-    "start:prod": "npm run build && npm start"
+    "start:prod": "npm run build && npm start",
+    "test": "npm test --prefix server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Trophy } from "lucide-react";
-import { getPlayers } from "./api";
+import { getPlayers, getSeasons } from "./api";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
-import type { Player, PlayersResponse, StatKey } from "./types";
+import type { Player, PlayersResponse, SeasonInfo, StatKey } from "./types";
 
 const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
   { key: "totalPoints", label: "Total Points" },
@@ -17,6 +17,8 @@ const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
 
 export default function App() {
   const [data, setData] = useState<PlayersResponse | null>(null);
+  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
+  const [season, setSeason] = useState("2026");
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
   const [sort, setSort] = useState<StatKey | "totalPoints">("totalPoints");
@@ -25,9 +27,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    getSeasons()
+      .then((result) => {
+        setSeasons(result.seasons);
+        setSeason((current) =>
+          result.seasons.some((item) => item.year === current) ? current : result.defaultSeason
+        );
+      })
+      .catch(() => {
+        setSeasons([{ year: "2026", label: "2026 Season", slug: "2026-tuff-stats" }]);
+      });
+  }, []);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      getPlayers(search, sort, team)
+      getPlayers(search, sort, team, season)
         .then((result) => {
           setData(result);
           setError(null);
@@ -39,11 +54,12 @@ export default function App() {
         .finally(() => setLoading(false));
     }, 180);
     return () => window.clearTimeout(timeout);
-  }, [search, sort, team]);
+  }, [search, sort, team, season]);
 
   const leaders = useMemo(() => data?.players.slice(0, 5) ?? [], [data]);
   const teams = data?.meta.teams ?? [];
   const sortLabel = sorts.find((item) => item.key === sort)?.label ?? "Leaders";
+  const seasonLabel = data?.meta.seasonLabel ?? `${season} Season`;
   const statValue = (player: Player) => sort === "totalPoints" ? player.derived.totalPoints : player.stats[sort];
   const filterLabel = team || (search ? `“${search}”` : "all teams");
 
@@ -54,7 +70,22 @@ export default function App() {
           <div><strong>TUFF</strong><span>TORONTO FLAG FOOTBALL</span></div>
         </div>
         <nav><a className="active">Players</a></nav>
-        <div className="season-pill">2026 SEASON</div>
+        <label className="season-pill">
+          <span className="season-pill-label">Season</span>
+          <select
+            value={season}
+            onChange={(event) => {
+              setSeason(event.target.value);
+              setTeam("");
+              setSelected(null);
+            }}
+            aria-label="Select season"
+          >
+            {(seasons.length ? seasons : [{ year: season, label: `${season} Season`, slug: "" }]).map((item) => (
+              <option key={item.year} value={item.year}>{item.year}</option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <div className="page-grid">
@@ -92,7 +123,7 @@ export default function App() {
         <main>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">2026 REGULAR SEASON</div>
+              <div className="eyebrow">{seasonLabel.toUpperCase()}</div>
               <h1>Player stats</h1>
               <p>{data?.meta.total ?? 0} players · {filterLabel} · sorted by {sortLabel.toLowerCase()}</p>
             </div>
@@ -110,7 +141,7 @@ export default function App() {
                   <span className="football-laces" />
                 </div>
               </div>
-              <span>{data ? "Updating players…" : "Loading league stats…"}</span>
+              <span>{data ? `Loading ${season}…` : "Loading league stats…"}</span>
             </div>
           )}
 
@@ -124,7 +155,7 @@ export default function App() {
 
           {!loading && data?.players.length === 0 && (
             <div className="empty">
-              No players match{search ? ` “${search}”` : ""}{team ? `${search ? " on" : ""} ${team}` : ""}.
+              No players match{search ? ` “${search}”` : ""}{team ? `${search ? " on" : ""} ${team}` : ""} in {season}.
             </div>
           )}
         </main>

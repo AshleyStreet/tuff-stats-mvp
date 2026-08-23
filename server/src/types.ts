@@ -47,5 +47,15 @@ export interface PlayersResponse {
     fetchedAt: string;
     total: number;
     teams: string[];
+    season: string;
+    seasonLabel: string;
   };
+}
+
+export interface SeasonInfo {
+  year: string;
+  label: string;
+  slug: string;
+  seasonId?: number;
+  url?: string;
 }

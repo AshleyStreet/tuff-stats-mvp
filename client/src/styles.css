@@ -39,7 +39,39 @@ nav { display:flex; align-self:stretch; gap:34px; }
 nav a { display:flex; align-items:center; font:700 15px 'Barlow Condensed'; text-transform:uppercase; color:#c8c8c8; position:relative; }
 nav a.active { color:white; }
 nav a.active::after { content:""; position:absolute; left:0;right:0;bottom:0;height:3px;background:var(--red); }
-.season-pill { margin-left:auto; border:1px solid #343434; border-radius:6px; padding:10px 14px; font:600 13px 'Barlow Condensed'; }
+.season-pill {
+  margin-left: auto;
+  border: 1px solid #343434;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #141516;
+}
+.season-pill-label {
+  color: #9b9da1;
+  font: 600 11px 'Barlow Condensed';
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.season-pill select {
+  width: auto;
+  min-width: 78px;
+  border: 0;
+  border-radius: 4px;
+  background: #171819;
+  color: #f5f5f5;
+  padding: 4px 6px;
+  font: 700 14px 'Barlow Condensed';
+  letter-spacing: 0.4px;
+  color-scheme: dark;
+}
+.season-pill option,
+select option {
+  color: #f5f5f5;
+  background: #171819;
+}
 
 .page-grid { display:grid; grid-template-columns: 260px minmax(0,1fr); min-height:calc(100vh - 82px); }
 .sidebar { border-right:1px solid var(--line); padding:32px 22px; background:linear-gradient(180deg,#121314,#0d0e0f); position:sticky; top:82px; height:calc(100vh - 82px); overflow:auto; }
@@ -48,7 +80,7 @@ nav a.active::after { content:""; position:absolute; left:0;right:0;bottom:0;hei
 .search-box input { width:100%; border:0; outline:0; background:transparent; color:white; }
 .search-box input::placeholder { color:#717479; }
 .field-label { display:block; margin-top:25px; margin-bottom:8px; color:#aaa; font:700 11px 'Barlow Condensed'; letter-spacing:1px; }
-select { width:100%; color:#eee; background:#171819; border:1px solid #36383a; border-radius:5px; padding:11px 12px; outline:none; }
+select { width:100%; color:#eee; background:#171819; border:1px solid #36383a; border-radius:5px; padding:11px 12px; outline:none; color-scheme:dark; }
 .leaders-block { border-top:1px solid var(--line); margin:28px -22px 0; padding:25px 22px 0; }
 .leaders-block h3 { margin:0 0 10px; display:flex; align-items:center; gap:7px; font:700 18px 'Barlow Condensed'; text-transform:uppercase; }
 .leader-category { display:inline-block; color:#ff6e73; font:700 11px 'Barlow Condensed'; text-transform:uppercase; margin-bottom:8px; }
