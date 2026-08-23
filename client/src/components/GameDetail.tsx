@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Trophy, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { getGame } from "../api";
 import type { BoxScorePlayer, BoxScoreSide, GameDetail, Player, ScheduleGame } from "../types";
+import { TeamLogo } from "./TeamLogo";
 
 interface Props {
   game: ScheduleGame;
@@ -122,18 +123,17 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
 
       {home && away && (
         <div className="hero-kpis game-scoreboard">
-          <div>
-            <span>{home.name}</span>
-            <strong className={home.outcome === "win" ? "winner-score" : ""}>
-              {game.status === "final" ? home.score ?? "—" : "—"}
-            </strong>
-          </div>
-          <div>
-            <span>{away.name}</span>
-            <strong className={away.outcome === "win" ? "winner-score" : ""}>
-              {game.status === "final" ? away.score ?? "—" : "—"}
-            </strong>
-          </div>
+          {[home, away].map((side) => (
+            <div key={side.id} className={side.outcome === "win" ? "winner-side" : ""}>
+              <span className="scoreboard-team">
+                <TeamLogo name={side.name} src={side.logoUrl} className="team-logo-md" />
+                {side.name}
+              </span>
+              <strong className={side.outcome === "win" ? "winner-score" : ""}>
+                {game.status === "final" ? side.score ?? "—" : "—"}
+              </strong>
+            </div>
+          ))}
         </div>
       )}
 
@@ -150,7 +150,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
         return (
           <section key={side.id}>
             <h3>
-              <Trophy size={17} /> {side.name}
+              <TeamLogo name={side.name} src={side.logoUrl} className="team-logo-sm" /> {side.name}
             </h3>
             <div className="box-table">
               <div className="box-row box-head">

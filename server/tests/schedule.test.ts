@@ -1,4 +1,4 @@
-import { hydrateScheduleGames, mapEventLineup, parseBoxScore, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
+import { applyTeamLogos, extractPlayerGameLog, hydrateScheduleGames, mapEventLineup, parseBoxScore, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
 
 describe("parseScheduleEvent", () => {
   const teams = new Map([
@@ -164,6 +164,69 @@ describe("parseBoxScore", () => {
   it("returns empty lineups when performance is missing", () => {
     const sides = parseBoxScore(undefined, [{ id: 1, name: "Cobras" }, { id: 2, name: "Wildcats" }]);
     expect(sides.every((side) => side.players.length === 0)).toBe(true);
+  });
+});
+
+describe("applyTeamLogos", () => {
+  it("attaches logo URLs by SportsPress team id", () => {
+    const games = applyTeamLogos(
+      [
+        {
+          id: 1,
+          date: "2026-08-09T13:40:00",
+          status: "final",
+          title: "Cobras vs Wildcats",
+          teams: [
+            { id: 6258, name: "Cobras", score: 28 },
+            { id: 118, name: "Wildcats", score: 19 }
+          ]
+        }
+      ],
+      new Map([
+        [6258, "https://example.com/cobras.png"],
+        [118, "https://example.com/wildcats.png"]
+      ])
+    );
+    expect(games[0]?.teams.map((side) => side.logoUrl)).toEqual([
+      "https://example.com/cobras.png",
+      "https://example.com/wildcats.png"
+    ]);
+  });
+});
+
+describe("extractPlayerGameLog", () => {
+  it("keeps the matching player's row and opponent", () => {
+    const game = {
+      id: 7550,
+      date: "2026-08-09T13:40:00",
+      status: "final" as const,
+      title: "Cobras vs Wildcats",
+      teams: [
+        { id: 6258, name: "Cobras", score: 28, outcome: "win" },
+        { id: 118, name: "Wildcats", score: 19, outcome: "loss" }
+      ]
+    };
+    const sides = parseBoxScore(
+      {
+        "6258": {
+          "5511": { number: "5", rec: "6", rectd: "1", patd: "0", int: "2", sack: "0" }
+        },
+        "118": {
+          "7585": { number: "6", rec: "5", rectd: "1", patd: "0", int: "1", sack: "0" }
+        }
+      },
+      game.teams
+    );
+    const log = extractPlayerGameLog([{ game, sides }], ["5511"]);
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({
+      team: "Cobras",
+      opponent: "Wildcats",
+      outcome: "win",
+      score: 28,
+      oppScore: 19,
+      stats: { rec: 6, recTD: 1, int: 2 }
+    });
   });
 });
 

@@ -1,10 +1,13 @@
 import { ChevronRight } from "lucide-react";
+import { teamLogoUrl } from "../lib/teams";
 import type { Player } from "../types";
+import { TeamLogo } from "./TeamLogo";
 
 interface Props {
   player: Player;
   selected: boolean;
   onSelect: (player: Player) => void;
+  teamLogos?: Record<string, string>;
 }
 
 const miniStats = [
@@ -14,7 +17,7 @@ const miniStats = [
   ["SACK", "sack"]
 ] as const;
 
-export function PlayerCard({ player, selected, onSelect }: Props) {
+export function PlayerCard({ player, selected, onSelect, teamLogos }: Props) {
   const initials = player.name
     .split(" ")
     .map((part) => part[0])
@@ -24,7 +27,11 @@ export function PlayerCard({ player, selected, onSelect }: Props) {
   return (
     <button className={`player-card ${selected ? "selected" : ""}`} onClick={() => onSelect(player)}>
       <div className="player-card-top">
-        <div className="avatar">{initials}</div>
+        <TeamLogo
+          name={player.team || player.name}
+          src={teamLogoUrl(player.team, teamLogos)}
+          fallback={initials}
+        />
         <div className="player-heading">
           <strong>{player.name}</strong>
           <span>{player.team ? `${player.team} · ` : ""}{player.stats.gms} games played</span>

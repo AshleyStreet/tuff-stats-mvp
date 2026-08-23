@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ExternalLink, Shield, Trophy, X, Zap } from "lucide-react";
-import { getPlayerProfile, peekPlayerProfile } from "../api";
-import type { Player, PlayerProfile, SeasonAppearance } from "../types";
+import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
+import { teamLogoUrl } from "../lib/teams";
+import type { Player, PlayerGameLog, PlayerProfile, ScheduleGame, SeasonAppearance } from "../types";
 import { CareerChart } from "./CareerChart";
+import { TeamLogo } from "./TeamLogo";
 
 interface Props {
   player: Player;
   activeSeason: string;
+  teamLogos?: Record<string, string>;
   onClose: () => void;
   onSelectSeason?: (season: string) => void;
+  onSelectGame?: (game: ScheduleGame) => void;
 }
 
 const Row = ({ label, value }: { label: string; value: number }) => (
@@ -19,7 +23,21 @@ function initials(name: string) {
   return name.split(" ").map((part) => part[0]).slice(0, 2).join("");
 }
 
-export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: Props) {
+function formatGameDay(iso: string) {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatResult(outcome?: string, score?: number, oppScore?: number) {
+  const mark = outcome === "win" ? "W" : outcome === "loss" ? "L" : outcome === "draw" || outcome === "tie" ? "T" : "";
+  if (typeof score === "number" && typeof oppScore === "number") {
+    return `${mark ? `${mark} ` : ""}${score}–${oppScore}`;
+  }
+  return mark || "—";
+}
+
+export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame }: Props) {
   const cached = peekPlayerProfile(player.id);
   const [profile, setProfile] = useState<PlayerProfile | null>(cached);
   const [loading, setLoading] = useState(!cached);
@@ -88,13 +106,47 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
   const displayName = profile?.name ?? player.name;
   const teamLabel = profile?.currentTeam ?? player.team;
   const linkedCount = profile?.linkedSourceIds?.length ?? 0;
+  const [gameLog, setGameLog] = useState<PlayerGameLog | null>(null);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const year = seasonView?.season ?? selectedSeason ?? activeSeason;
+    if (!player.id || !year) return;
+    let cancelled = false;
+    setGameLog(null);
+    setLogLoading(true);
+    setLogError(null);
+    getPlayerGameLog(player.id, year)
+      .then((result) => {
+        if (cancelled) return;
+        setGameLog(result);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setGameLog(null);
+          setLogError(err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [player.id, seasonView?.season, selectedSeason, activeSeason]);
 
   return (
     <aside className="detail-panel">
       <button className="icon-button close" onClick={onClose} aria-label="Close player details"><X size={20} /></button>
 
       <div className="detail-hero">
-        <div className="avatar large">{initials(displayName)}</div>
+        <TeamLogo
+          name={teamLabel || displayName}
+          src={teamLogoUrl(seasonView?.team ?? teamLabel, teamLogos)}
+          className="avatar large team-avatar"
+          fallback={initials(displayName)}
+        />
         <div>
           <div className="eyebrow">PLAYER PROFILE</div>
           <h2>
@@ -139,6 +191,7 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
           <div className="team-chips">
             {profile.teams.map((team) => (
               <span className={`team-chip${team === profile.currentTeam ? " current" : ""}`} key={team}>
+                <TeamLogo name={team} src={teamLogoUrl(team, teamLogos)} className="team-logo-xs" />
                 {team}
               </span>
             ))}
@@ -186,6 +239,62 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
             <div><span>REC TD</span><strong>{seasonView.stats.recTD}</strong></div>
             <div><span>INT</span><strong>{seasonView.stats.int}</strong></div>
           </div>
+
+          <section>
+            <h3><CalendarDays size={17} /> Game log</h3>
+            {logLoading && <div className="profile-loading">Loading game log…</div>}
+            {logError && <div className="profile-error">{logError}</div>}
+            {!logLoading && !logError && (!gameLog || gameLog.games.length === 0) && (
+              <div className="profile-loading">No game log posted for this season yet.</div>
+            )}
+            {gameLog && gameLog.games.length > 0 && (
+              <div className="log-table">
+                <div className="log-row log-head">
+                  <span>Date</span>
+                  <span>Opp</span>
+                  <span>Res</span>
+                  <span>Rec</span>
+                  <span>RecTD</span>
+                  <span>PaTD</span>
+                  <span>INT</span>
+                  <span>Sack</span>
+                </div>
+                {gameLog.games.map((row) => {
+                  const cells = (
+                    <>
+                      <span>{formatGameDay(row.game.date)}</span>
+                      <span className="log-opp">{row.opponent}</span>
+                      <span className={row.outcome === "win" ? "winner-score" : ""}>
+                        {formatResult(row.outcome, row.score, row.oppScore)}
+                      </span>
+                      <span>{row.stats.rec}</span>
+                      <span>{row.stats.recTD}</span>
+                      <span>{row.stats.paTD}</span>
+                      <span>{row.stats.int}</span>
+                      <span>{row.stats.sack}</span>
+                    </>
+                  );
+                  if (onSelectGame) {
+                    return (
+                      <button
+                        type="button"
+                        className="log-row"
+                        key={row.game.id}
+                        onClick={() => onSelectGame(row.game)}
+                      >
+                        {cells}
+                      </button>
+                    );
+                  }
+                  return (
+                    <div className="log-row" key={row.game.id}>
+                      {cells}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
           <section>
             <h3><Zap size={17} /> Offense</h3>

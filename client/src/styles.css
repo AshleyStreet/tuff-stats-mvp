@@ -316,6 +316,10 @@ select:focus { border-color: rgba(227, 27, 35, 0.45); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 .leader-row strong { color: white; font: 700 16px "Barlow Condensed"; }
 
@@ -378,6 +382,60 @@ h1 {
   background: linear-gradient(145deg, #3a1518, #1a1011);
   color: #f5f5f5;
   border-color: rgba(227, 27, 35, 0.45);
+}
+img.team-avatar, img.avatar {
+  object-fit: contain;
+  background: #101112;
+  padding: 3px;
+}
+.team-logo-md {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  object-fit: contain;
+  flex: none;
+  background: #101112;
+}
+.team-logo-sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  object-fit: contain;
+  flex: none;
+  background: #101112;
+}
+.team-logo-xs {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex: none;
+  background: #101112;
+}
+div.team-logo-md, div.team-logo-sm, div.team-logo-xs {
+  display: grid;
+  place-items: center;
+  color: #f5f5f5;
+  font: 700 8px "Barlow Condensed";
+  background: linear-gradient(145deg, #3a1518, #1a1011);
+}
+div.team-logo-md { font-size: 10px; }
+.team-page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.game-side-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.scoreboard-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 .inline-icon {
   display: inline-block;
@@ -460,7 +518,7 @@ h1 {
 .game-side {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
 }
 .game-side strong {
@@ -663,8 +721,11 @@ h1 {
   overflow: hidden;
 }
 .hero-kpis.compact { margin-top: 10px; margin-bottom: 8px; }
-.hero-kpis.game-scoreboard { grid-template-columns: 1fr 1fr; }
+.hero-kpis.game-scoreboard { grid-template-columns: 1fr; }
 .winner-score { color: var(--gold); }
+.hero-kpis.game-scoreboard .winner-side .scoreboard-team {
+  color: white;
+}
 .hero-kpis div {
   padding: 14px 10px;
   text-align: center;
@@ -681,6 +742,30 @@ h1 {
   display: block;
   font: 800 26px "Barlow Condensed";
   margin-top: 3px;
+}
+.hero-kpis.game-scoreboard > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  border-right: 0;
+  border-bottom: 1px solid #292a2c;
+}
+.hero-kpis.game-scoreboard > div:last-child { border-bottom: 0; }
+.hero-kpis .scoreboard-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #d4d6d9;
+  font: 700 18px "Barlow Condensed";
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.hero-kpis.game-scoreboard strong {
+  margin-top: 0;
+  font-size: 28px;
 }
 
 .detail-panel section { margin-top: 22px; }
@@ -709,6 +794,9 @@ h1 {
 
 .team-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   padding: 6px 10px;
@@ -847,6 +935,46 @@ button.box-row:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 .game-detail-hero h2 { font-size: 30px; }
+
+.log-table {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0f1011;
+}
+.log-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 62px 28px 38px 34px 28px 32px;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid #232526;
+  background: transparent;
+  color: #d7d7d7;
+  text-align: left;
+  font-size: 11px;
+}
+button.log-row { cursor: pointer; }
+.log-row:last-child { border-bottom: 0; }
+button.log-row:hover {
+  background: rgba(227, 27, 35, 0.12);
+  color: white;
+}
+.log-head {
+  color: #777b80;
+  font: 700 10px "Barlow Condensed";
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #292b2c;
+}
+.log-opp {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .source-link {
   display: flex;

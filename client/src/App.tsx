@@ -6,6 +6,7 @@ import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
 import { TeamCard } from "./components/TeamCard";
+import { TeamLogo } from "./components/TeamLogo";
 import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
@@ -130,8 +131,8 @@ export default function App() {
   );
 
   const teamSummaries = useMemo(
-    () => buildTeamSummaries(rosterPlayers, data?.meta.standings ?? []),
-    [rosterPlayers, data?.meta.standings]
+    () => buildTeamSummaries(rosterPlayers, data?.meta.standings ?? [], data?.meta.teamLogos ?? {}),
+    [rosterPlayers, data?.meta.standings, data?.meta.teamLogos]
   );
 
   const filteredTeams = useMemo(() => {
@@ -179,6 +180,10 @@ export default function App() {
 
   function openGame(game: ScheduleGame) {
     setSelected(null);
+    setSelectedGame(game);
+  }
+
+  function openGameFromProfile(game: ScheduleGame) {
     setSelectedGame(game);
   }
 
@@ -313,7 +318,10 @@ export default function App() {
                 {filteredTeams.slice(0, 8).map((item, index) => (
                   <button className="leader-row" key={item.name} onClick={() => openTeam(item.name)}>
                     <span className="leader-rank">{index + 1}</span>
-                    <span className="leader-name">{item.name}</span>
+                    <span className="leader-name">
+                      <TeamLogo name={item.name} src={item.logoUrl} className="team-logo-xs" />
+                      {item.name}
+                    </span>
                     <strong>
                       {item.standing
                         ? `${item.standing.wins}-${item.standing.losses}${item.standing.ties ? `-${item.standing.ties}` : ""}`
@@ -406,7 +414,10 @@ export default function App() {
                   <button type="button" className="back-link" onClick={() => setActiveTeam(null)}>
                     <ArrowLeft size={15} /> All teams
                   </button>
-                  <h1>{activeTeam}</h1>
+                  <h1 className="team-page-title">
+                    <TeamLogo name={activeTeam} src={activeTeamSummary?.logoUrl} />
+                    {activeTeam}
+                  </h1>
                   <p>
                     {players.length} players
                     {activeTeamSummary?.standing
@@ -474,7 +485,13 @@ export default function App() {
           {!loading && (tab === "players" || activeTeam) && (
             <div className="player-grid">
               {players.map((player) => (
-                <PlayerCard key={player.id} player={player} selected={selected?.id === player.id} onSelect={openPlayer} />
+                <PlayerCard
+                  key={player.id}
+                  player={player}
+                  selected={selected?.id === player.id}
+                  onSelect={openPlayer}
+                  teamLogos={data?.meta.teamLogos}
+                />
               ))}
             </div>
           )}
@@ -506,7 +523,7 @@ export default function App() {
           )}
         </main>
 
-        {selectedGame && !selected && (
+        {selectedGame && (
           <GameDetail
             game={selectedGame}
             season={season}
@@ -516,10 +533,11 @@ export default function App() {
           />
         )}
 
-        {selected && (
+        {selected && !selectedGame && (
           <PlayerDetail
             player={selected}
             activeSeason={season}
+            teamLogos={data?.meta.teamLogos}
             onClose={() => setSelected(null)}
             onSelectSeason={(year) => {
               setSeason(year);
@@ -527,6 +545,7 @@ export default function App() {
               setActiveTeam(null);
               setSelectedGame(null);
             }}
+            onSelectGame={openGameFromProfile}
           />
         )}
       </div>

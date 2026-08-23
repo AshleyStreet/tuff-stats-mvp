@@ -10,6 +10,7 @@ export type TeamSummary = {
   };
   standing?: TeamStanding;
   topScorer?: Player;
+  logoUrl?: string;
 };
 
 const FRANCHISE_TEAM_NAMES = [
@@ -59,6 +60,11 @@ function teamAliases(standings: TeamStanding[]): string[] {
   return aliases;
 }
 
+export function teamLogoUrl(name: string | undefined, logos?: Record<string, string>) {
+  if (!name || !logos) return undefined;
+  return logos[name] ?? logos[canonicalTeamName(name)];
+}
+
 export function withCanonicalTeams(players: Player[], standings: TeamStanding[] = []): Player[] {
   const aliases = teamAliases(standings);
   return players.map((player) => {
@@ -84,7 +90,11 @@ function sumStats(left: Stats, right: Stats): Stats {
   return total;
 }
 
-export function buildTeamSummaries(players: Player[], standings: TeamStanding[] = []): TeamSummary[] {
+export function buildTeamSummaries(
+  players: Player[],
+  standings: TeamStanding[] = [],
+  logos: Record<string, string> = {}
+): TeamSummary[] {
   const aliases = teamAliases(standings);
   const byTeam = new Map<string, Player[]>();
   for (const player of players) {
@@ -119,7 +129,8 @@ export function buildTeamSummaries(players: Player[], standings: TeamStanding[] 
         stats,
         derived: { totalTouchdowns, totalPoints },
         standing,
-        topScorer
+        topScorer,
+        logoUrl: teamLogoUrl(name, logos)
       };
     })
     .sort((a, b) => {
