@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: tuff-stats
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run install:all && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: CACHE_TTL_MS
+        value: "300000"
+      - key: TUFF_STATS_URL
+        value: https://www.playtuff.ca/list/2026-tuff-stats/
+      - key: TUFF_LIST_SLUG
+        value: 2026-tuff-stats
