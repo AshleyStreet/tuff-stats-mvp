@@ -10,6 +10,7 @@ import {
   getPlayerProfile,
   getPlayers,
   getGame,
+  getPlayerGameLog,
   getSchedule,
   getSeasons,
   getServiceStatus,
@@ -133,6 +134,18 @@ app.get("/api/players", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     res.status(502).json({ error: "Unable to load TUFF stats", detail: message });
+  }
+});
+
+app.get("/api/players/:id/games", async (req, res) => {
+  try {
+    const season = String(req.query.season ?? "").trim();
+    const data = await getPlayerGameLog(String(req.params.id), season || undefined);
+    if (!data) return res.status(404).json({ error: "Player not found" });
+    return res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(502).json({ error: "Unable to load game log", detail: message });
   }
 });
 

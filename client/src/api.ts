@@ -1,4 +1,4 @@
-import type { GameDetail, PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
+import type { GameDetail, PlayerGameLog, PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
 
 const profileCache = new Map<string, PlayerProfile>();
 const profileInflight = new Map<string, Promise<PlayerProfile>>();
@@ -105,6 +105,36 @@ export async function getGame(id: number, season = "") {
   });
 
   gameInflight.set(key, request);
+  return request;
+}
+
+const gameLogCache = new Map<string, PlayerGameLog>();
+const gameLogInflight = new Map<string, Promise<PlayerGameLog>>();
+
+export async function getPlayerGameLog(playerId: string, season = "") {
+  const key = `${playerId}:${season || "default"}`;
+  const cached = gameLogCache.get(key);
+  if (cached) return cached;
+
+  const pending = gameLogInflight.get(key);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    const response = await fetch(`/api/players/${encodeURIComponent(playerId)}/games?${params}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.detail ?? error?.error ?? "Could not load game log");
+    }
+    const data = (await response.json()) as PlayerGameLog;
+    gameLogCache.set(key, data);
+    return data;
+  })().finally(() => {
+    gameLogInflight.delete(key);
+  });
+
+  gameLogInflight.set(key, request);
   return request;
 }
 

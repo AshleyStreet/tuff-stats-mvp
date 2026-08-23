@@ -1,4 +1,5 @@
 import type { ScheduleGame } from "../types";
+import { TeamLogo } from "./TeamLogo";
 
 function formatGameWhen(iso: string) {
   const date = new Date(iso);
@@ -37,11 +38,17 @@ export function GameCard({
       </div>
       <div className="game-matchup">
         <div className={`game-side${home.outcome === "win" ? " winner" : ""}`}>
-          <strong>{home.name}</strong>
+          <span className="game-side-name">
+            <TeamLogo name={home.name} src={home.logoUrl} className="team-logo-sm" />
+            <strong>{home.name}</strong>
+          </span>
           <span className="game-score">{game.status === "final" ? home.score ?? "—" : ""}</span>
         </div>
         <div className={`game-side${away.outcome === "win" ? " winner" : ""}`}>
-          <strong>{away.name}</strong>
+          <span className="game-side-name">
+            <TeamLogo name={away.name} src={away.logoUrl} className="team-logo-sm" />
+            <strong>{away.name}</strong>
+          </span>
           <span className="game-score">{game.status === "final" ? away.score ?? "—" : ""}</span>
         </div>
       </div>

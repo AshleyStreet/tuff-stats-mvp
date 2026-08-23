@@ -64,6 +64,7 @@ export interface PlayersResponse {
     season: string;
     seasonLabel: string;
     standings?: TeamStanding[];
+    teamLogos?: Record<string, string>;
   };
 }
 

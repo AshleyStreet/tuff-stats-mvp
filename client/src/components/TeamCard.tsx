@@ -1,5 +1,6 @@
 import { ChevronRight, Users } from "lucide-react";
 import { formatRecord, type TeamSummary } from "../lib/teams";
+import { TeamLogo } from "./TeamLogo";
 
 interface Props {
   team: TeamSummary;
@@ -8,7 +9,6 @@ interface Props {
 }
 
 export function TeamCard({ team, selected, onSelect }: Props) {
-  const mark = team.name.slice(0, 2).toUpperCase();
   const record = formatRecord(team.standing);
 
   return (
@@ -17,7 +17,7 @@ export function TeamCard({ team, selected, onSelect }: Props) {
       onClick={() => onSelect(team.name)}
     >
       <div className="player-card-top">
-        <div className="avatar team-avatar">{mark}</div>
+        <TeamLogo name={team.name} src={team.logoUrl} />
         <div className="player-heading">
           <strong>{team.name}</strong>
           <span>

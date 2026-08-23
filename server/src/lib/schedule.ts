@@ -6,6 +6,7 @@ export type ScheduleSide = {
   name: string;
   score?: number;
   outcome?: string;
+  logoUrl?: string;
 };
 
 export type ScheduleGame = {
@@ -35,6 +36,71 @@ export type GameDetail = {
   sides: BoxScoreSide[];
   meta: { fetchedAt: string };
 };
+
+export type GameLogEntry = {
+  game: ScheduleGame;
+  team: string;
+  opponent: string;
+  outcome?: string;
+  score?: number;
+  oppScore?: number;
+  stats: Stats;
+  derived: { totalTouchdowns: number };
+  number?: string;
+};
+
+export type PlayerGameLog = {
+  season: string;
+  sourceIds: string[];
+  games: GameLogEntry[];
+  meta: { fetchedAt: string };
+};
+
+export function applyTeamLogos(games: ScheduleGame[], logos: Map<number, string>): ScheduleGame[] {
+  if (!games.length || !logos.size) return games;
+  let anyChanged = false;
+  const next = games.map((game) => {
+    let changed = false;
+    const teams = game.teams.map((side) => {
+      const logoUrl = logos.get(side.id);
+      if (!logoUrl || side.logoUrl === logoUrl) return side;
+      changed = true;
+      return { ...side, logoUrl };
+    });
+    if (!changed) return game;
+    anyChanged = true;
+    return { ...game, teams };
+  });
+  return anyChanged ? next : games;
+}
+
+export function extractPlayerGameLog(
+  boxed: Array<{ game: ScheduleGame; sides: BoxScoreSide[] }>,
+  sourceIds: Iterable<string>
+): GameLogEntry[] {
+  const ids = new Set([...sourceIds].map(String));
+  const rows: GameLogEntry[] = [];
+  for (const { game, sides } of boxed) {
+    for (const side of sides) {
+      const player = side.players.find((row) => ids.has(row.sourceId));
+      if (!player) continue;
+      const opponent = sides.find((other) => other.id !== side.id);
+      rows.push({
+        game,
+        team: side.name,
+        opponent: opponent?.name ?? "Opponent",
+        outcome: side.outcome,
+        score: side.score,
+        oppScore: opponent?.score,
+        stats: player.stats,
+        derived: player.derived,
+        number: player.number
+      });
+      break;
+    }
+  }
+  return rows.sort((a, b) => b.game.date.localeCompare(a.game.date) || a.game.id - b.game.id);
+}
 
 function jerseySortValue(value?: string) {
   const parsed = Number(value);

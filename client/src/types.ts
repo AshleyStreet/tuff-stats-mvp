@@ -72,6 +72,7 @@ export interface ScheduleSide {
   name: string;
   score?: number;
   outcome?: string;
+  logoUrl?: string;
 }
 
 export interface ScheduleGame {
@@ -108,6 +109,25 @@ export interface GameDetail {
   meta: { fetchedAt: string };
 }
 
+export interface GameLogEntry {
+  game: ScheduleGame;
+  team: string;
+  opponent: string;
+  outcome?: string;
+  score?: number;
+  oppScore?: number;
+  stats: Stats;
+  derived: { totalTouchdowns: number };
+  number?: string;
+}
+
+export interface PlayerGameLog {
+  season: string;
+  sourceIds: string[];
+  games: GameLogEntry[];
+  meta: { fetchedAt: string };
+}
+
 export interface PlayersResponse {
   players: Player[];
   meta: {
@@ -118,5 +138,6 @@ export interface PlayersResponse {
     season: string;
     seasonLabel: string;
     standings?: TeamStanding[];
+    teamLogos?: Record<string, string>;
   };
 }
