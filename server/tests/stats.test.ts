@@ -1,5 +1,6 @@
 import {
   buildPlayer,
+  canonicalTeamName,
   chunk,
   decodeEntities,
   emptyStats,
@@ -134,5 +135,28 @@ describe("teamNameFromRosterTitle", () => {
 
   it("title-cases slug-style names", () => {
     expect(teamNameFromRosterTitle("2024-wolfhounds", "2024")).toBe("Wolfhounds");
+  });
+});
+
+describe("canonicalTeamName", () => {
+  it("maps sponsor-prefixed roster titles onto standings nicknames", () => {
+    expect(canonicalTeamName("Woody’s Wildcats")).toBe("Wildcats");
+    expect(canonicalTeamName("The Drink Wolfhounds")).toBe("Wolfhounds");
+    expect(canonicalTeamName("The Storm Crows")).toBe("Storm Crows");
+    expect(canonicalTeamName("Blake House Brawlers")).toBe("Brawlers");
+    expect(canonicalTeamName("Fox & Fiddle Menace")).toBe("Menace");
+    expect(canonicalTeamName("Pegasus Stallions")).toBe("Stallions");
+  });
+
+  it("keeps names that already match standings", () => {
+    expect(canonicalTeamName("Cobras")).toBe("Cobras");
+    expect(canonicalTeamName("  sirens  ")).toBe("Sirens");
+  });
+
+  it("prefers the longest alias and leaves unknown names alone", () => {
+    expect(canonicalTeamName("Hair of The Dog Terriers")).toBe("Hair of The Dog Terriers");
+    expect(
+      canonicalTeamName("The Storm Crows", ["Crows", "Storm Crows", "Wildcats"])
+    ).toBe("Storm Crows");
   });
 });

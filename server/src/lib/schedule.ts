@@ -48,6 +48,39 @@ function isPlaceholderTeamName(name: string, id: number) {
 }
 
 /** Fix placeholder "Team 114" names from cache using a fresh team map and/or event title. */
+/**
+ * SportsPress stores event lineups as `[0, ...team0, 0, ...team1]`.
+ * Map each player id onto the matching team name.
+ */
+export function mapEventLineup(
+  teamIds: number[],
+  playerIds: number[],
+  teamNames: Map<number, string>
+): Array<{ playerId: number; team: string }> {
+  const groups: number[][] = [];
+  let current: number[] = [];
+  for (const id of playerIds) {
+    if (id === 0) {
+      if (current.length) groups.push(current);
+      current = [];
+      continue;
+    }
+    if (id > 0) current.push(id);
+  }
+  if (current.length) groups.push(current);
+
+  const rows: Array<{ playerId: number; team: string }> = [];
+  const count = Math.min(groups.length, teamIds.length);
+  for (let index = 0; index < count; index += 1) {
+    const team = teamNames.get(teamIds[index]!)?.trim();
+    if (!team) continue;
+    for (const playerId of groups[index]!) {
+      rows.push({ playerId, team });
+    }
+  }
+  return rows;
+}
+
 export function hydrateScheduleGames(games: ScheduleGame[], teamNames: Map<number, string>): ScheduleGame[] {
   let anyChanged = false;
   const next = games.map((game) => {

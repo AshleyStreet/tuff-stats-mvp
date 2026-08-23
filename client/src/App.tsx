@@ -7,7 +7,7 @@ import { PlayerDetail } from "./components/PlayerDetail";
 import { TeamCard } from "./components/TeamCard";
 import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
-import { buildTeamSummaries } from "./lib/teams";
+import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
 import type { Player, PlayersResponse, ScheduleResponse, SeasonInfo, StatKey } from "./types";
 
 type Tab = "players" | "teams" | "schedule";
@@ -118,9 +118,14 @@ export default function App() {
     };
   }, [season, tab]);
 
-  const teamSummaries = useMemo(
-    () => buildTeamSummaries(data?.players ?? [], data?.meta.standings ?? []),
+  const rosterPlayers = useMemo(
+    () => withCanonicalTeams(data?.players ?? [], data?.meta.standings ?? []),
     [data?.players, data?.meta.standings]
+  );
+
+  const teamSummaries = useMemo(
+    () => buildTeamSummaries(rosterPlayers, data?.meta.standings ?? []),
+    [rosterPlayers, data?.meta.standings]
   );
 
   const filteredTeams = useMemo(() => {
@@ -133,16 +138,19 @@ export default function App() {
 
   const players = useMemo(
     () =>
-      filterAndSortPlayers(data?.players ?? [], {
+      filterAndSortPlayers(rosterPlayers, {
         search: tab === "players" || activeTeam ? search : "",
         team: rosterTeam,
         sort
       }),
-    [data?.players, search, rosterTeam, sort, tab, activeTeam]
+    [rosterPlayers, search, rosterTeam, sort, tab, activeTeam]
   );
 
   const leaders = useMemo(() => players.slice(0, 5), [players]);
-  const teams = data?.meta.teams ?? [];
+  const teams = useMemo(
+    () => [...new Set(teamSummaries.map((item) => item.name))].sort((a, b) => a.localeCompare(b)),
+    [teamSummaries]
+  );
   const sortLabel = sorts.find((item) => item.key === sort)?.label ?? "Leaders";
   const seasonLabel = data?.meta.seasonLabel ?? `${season} Season`;
   const statValue = (player: Player) => (sort === "totalPoints" ? player.derived.totalPoints : player.stats[sort]);
