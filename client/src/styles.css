@@ -99,8 +99,75 @@ h1 { font:800 42px/1 'Barlow Condensed'; text-transform:uppercase; margin:7px 0 
 .source-link { display:flex;justify-content:center;align-items:center;gap:7px;margin-top:28px;padding:11px;border:1px solid #343638;border-radius:5px;color:#ddd;text-decoration:none;font:700 12px 'Barlow Condensed';text-transform:uppercase; }
 .source-link:hover { border-color:var(--red); }
 .loading,.empty,.error-card { padding:30px;border:1px solid #2e3032;border-radius:7px;background:#121314;color:#aaa; }
+.loading { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;min-height:240px;font:600 13px 'Barlow Condensed';letter-spacing:.6px;text-transform:uppercase; }
 .error-card { display:flex;flex-direction:column;gap:7px;border-color:#5c2528;color:#e8c6c8; }
 .error-card strong { color:#ff858a; }
+
+.football-spinner {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  perspective: 520px;
+}
+
+.football {
+  position: relative;
+  width: 58px;
+  height: 36px;
+  border-radius: 50% / 50%;
+  background:
+    radial-gradient(circle at 28% 32%, rgba(255, 220, 180, 0.35), transparent 42%),
+    linear-gradient(145deg, #a86b3a 0%, #7a4520 42%, #4a2a14 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.35),
+    0 10px 22px rgba(0, 0, 0, 0.35);
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation: football-tumble 0.85s linear infinite;
+}
+
+.football-stripe {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(245, 245, 245, 0.88);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.football-stripe-left { left: 9px; }
+.football-stripe-right { right: 9px; }
+
+.football-laces {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+  background: #f3f3f3;
+  border-radius: 2px;
+  box-shadow:
+    0 -5px 0 -0.5px #f3f3f3,
+    0 5px 0 -0.5px #f3f3f3,
+    -4px -2.5px 0 -0.7px #f3f3f3,
+    4px -2.5px 0 -0.7px #f3f3f3,
+    -4px 2.5px 0 -0.7px #f3f3f3,
+    4px 2.5px 0 -0.7px #f3f3f3;
+}
+
+/* Classic loading-GIF tumble: ball stays put, flips end-over-end */
+@keyframes football-tumble {
+  0%   { transform: rotateZ(-32deg) rotateX(0deg); }
+  100% { transform: rotateZ(-32deg) rotateX(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .football { animation: none; transform: rotateZ(-32deg); }
+}
 
 @media (max-width: 1180px) {
   .player-grid { grid-template-columns:repeat(2,minmax(230px,1fr)); }

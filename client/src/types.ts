@@ -9,6 +9,7 @@ export interface Player {
   id: string;
   name: string;
   profileUrl?: string;
+  team?: string;
   stats: Stats;
   derived: {
     totalTouchdowns: number;
@@ -20,5 +21,10 @@ export interface Player {
 
 export interface PlayersResponse {
   players: Player[];
-  meta: { source: "sportspress" | "html"; fetchedAt: string; total: number };
+  meta: {
+    source: "sportspress" | "html";
+    fetchedAt: string;
+    total: number;
+    teams: string[];
+  };
 }

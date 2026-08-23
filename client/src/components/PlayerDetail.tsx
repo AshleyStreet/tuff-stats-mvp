@@ -19,7 +19,7 @@ export function PlayerDetail({ player, onClose }: Props) {
         <div>
           <div className="eyebrow">PLAYER PROFILE</div>
           <h2>{player.name}</h2>
-          <p>{player.stats.gms} games played · {player.derived.totalPoints} total points</p>
+          <p>{player.team ? `${player.team} · ` : ""}{player.stats.gms} games played · {player.derived.totalPoints} total points</p>
         </div>
       </div>
 

@@ -29,6 +29,8 @@ export interface Player {
   id: string;
   name: string;
   profileUrl?: string;
+  team?: string;
+  sourceId?: string;
   stats: Stats;
   derived: {
     totalTouchdowns: number;
@@ -44,5 +46,6 @@ export interface PlayersResponse {
     source: "sportspress" | "html";
     fetchedAt: string;
     total: number;
+    teams: string[];
   };
 }

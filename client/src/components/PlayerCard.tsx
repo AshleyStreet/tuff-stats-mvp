@@ -27,7 +27,7 @@ export function PlayerCard({ player, selected, onSelect }: Props) {
         <div className="avatar">{initials}</div>
         <div className="player-heading">
           <strong>{player.name}</strong>
-          <span>{player.stats.gms} games played</span>
+          <span>{player.team ? `${player.team} · ` : ""}{player.stats.gms} games played</span>
         </div>
         <ChevronRight size={20} />
       </div>

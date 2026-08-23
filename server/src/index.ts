@@ -23,12 +23,17 @@ app.get("/api/players", async (req, res) => {
   try {
     const data = await getPlayers(req.query.refresh === "1");
     const search = String(req.query.search ?? "").trim().toLowerCase();
+    const team = String(req.query.team ?? "").trim().toLowerCase();
     const sort = String(req.query.sort ?? "totalPoints") as StatKey | "totalPoints";
     const order = req.query.order === "asc" ? 1 : -1;
 
-    let players = search
-      ? data.players.filter((player) => player.name.toLowerCase().includes(search))
-      : [...data.players];
+    let players = [...data.players];
+    if (team) {
+      players = players.filter((player) => (player.team ?? "").toLowerCase() === team);
+    }
+    if (search) {
+      players = players.filter((player) => player.name.toLowerCase().includes(search));
+    }
 
     players.sort((a, b) => {
       const aValue = sort === "totalPoints" ? a.derived.totalPoints : a.stats[sort] ?? 0;
