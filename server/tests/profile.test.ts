@@ -1,4 +1,11 @@
-import { careerFromSeasons, extractSourceId, sumStats } from "../src/lib/profile.js";
+import {
+  canSoftLink,
+  careerFromSeasons,
+  collectCareerAppearances,
+  extractSourceId,
+  normalizePlayerName,
+  sumStats
+} from "../src/lib/profile.js";
 import { buildPlayer, emptyStats } from "../src/lib/stats.js";
 
 describe("extractSourceId", () => {
@@ -9,6 +16,13 @@ describe("extractSourceId", () => {
 
   it("returns null when no id is present", () => {
     expect(extractSourceId("dave-s")).toBeNull();
+  });
+});
+
+describe("normalizePlayerName", () => {
+  it("ignores punctuation and case", () => {
+    expect(normalizePlayerName("Colin H.")).toBe("colin h");
+    expect(normalizePlayerName("  COLIN  H ")).toBe("colin h");
   });
 });
 
@@ -58,5 +72,98 @@ describe("careerFromSeasons", () => {
     expect(career.stats.rec).toBe(32);
     expect(career.derived.totalTouchdowns).toBe(8);
     expect(career.derived.totalPoints).toBe(50);
+  });
+});
+
+describe("canSoftLink", () => {
+  it("links adjacent seasons on the same team", () => {
+    expect(
+      canSoftLink(
+        { season: "2025", team: "Menace" },
+        [{ season: "2026", team: "Menace" }]
+      )
+    ).toBe(true);
+  });
+
+  it("does not link different teams without jersey match", () => {
+    expect(
+      canSoftLink(
+        { season: "2025", team: "Sirens" },
+        [{ season: "2026", team: "Rhinos" }]
+      )
+    ).toBe(false);
+  });
+
+  it("links on matching jersey numbers", () => {
+    expect(
+      canSoftLink(
+        { season: "2024", team: "Yetis", number: 7 },
+        [{ season: "2026", team: "Rhinos" }],
+        7
+      )
+    ).toBe(true);
+  });
+});
+
+describe("collectCareerAppearances", () => {
+  const stats = emptyStats();
+  const derived = buildPlayer("Colin H.", stats).derived;
+
+  it("keeps separate same-name players without continuity", () => {
+    const { appearances, linkedSourceIds } = collectCareerAppearances(
+      "4133",
+      "Colin H.",
+      [
+        {
+          season: "2026",
+          sourceId: "4133",
+          name: "Colin H.",
+          team: "Rhinos",
+          stats,
+          derived
+        },
+        {
+          season: "2025",
+          sourceId: "7006",
+          name: "Colin H.",
+          team: "Sirens",
+          stats,
+          derived
+        }
+      ]
+    );
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0]?.season).toBe("2026");
+    expect(linkedSourceIds).toEqual([]);
+  });
+
+  it("soft-links a reissued SportsPress id on the same team", () => {
+    const { appearances, linkedSourceIds } = collectCareerAppearances(
+      "100",
+      "Alex R.",
+      [
+        {
+          season: "2026",
+          sourceId: "100",
+          name: "Alex R.",
+          team: "Menace",
+          stats,
+          derived
+        },
+        {
+          season: "2025",
+          sourceId: "99",
+          name: "Alex R.",
+          team: "Menace",
+          stats,
+          derived
+        }
+      ]
+    );
+
+    expect(appearances).toHaveLength(2);
+    expect(linkedSourceIds).toEqual(["99"]);
+    expect(appearances.find((row) => row.season === "2025")?.linked).toBe(true);
   });
 });

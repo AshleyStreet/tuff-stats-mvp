@@ -40,6 +40,20 @@ export interface Player {
   };
 }
 
+export interface TeamStanding {
+  name: string;
+  pos?: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pct: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  netPoints: number;
+  standingsPoints: number;
+  streak?: string;
+}
+
 export interface PlayersResponse {
   players: Player[];
   meta: {
@@ -49,6 +63,7 @@ export interface PlayersResponse {
     teams: string[];
     season: string;
     seasonLabel: string;
+    standings?: TeamStanding[];
   };
 }
 

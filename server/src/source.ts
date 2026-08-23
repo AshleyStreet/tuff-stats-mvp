@@ -11,8 +11,10 @@ import {
   toNumber,
   yearFromStatsList
 } from "./lib/stats.js";
-import { careerFromSeasons, extractSourceId } from "./lib/profile.js";
+import { careerFromSeasons, collectCareerAppearances, extractSourceId } from "./lib/profile.js";
 import { listFingerprint, readCacheFile, writeCacheFile } from "./lib/cache.js";
+import { hydrateScheduleGames, parseScheduleEvent, type ScheduleGame } from "./lib/schedule.js";
+import { parseStandingsTable, standingsSlugCandidates, type TeamStanding } from "./lib/standings.js";
 import type { Player, PlayersResponse, SeasonInfo } from "./types.js";
 
 const SITE_ORIGIN = new URL(process.env.TUFF_STATS_URL ?? "https://www.playtuff.ca/list/2026-tuff-stats/").origin;
@@ -45,6 +47,50 @@ let seasonsMemory: { fingerprint: string; seasons: SeasonInfo[] } | null = null;
 let listsMemory: ListsCacheEntry | null = null;
 let listsInflight: Promise<SpList[]> | null = null;
 
+export type PlayerProfile = {
+  id: string;
+  sourceId: string;
+  name: string;
+  number?: number | string;
+  profileUrl?: string;
+  currentTeam?: string;
+  teams: string[];
+  linkedSourceIds?: string[];
+  seasons: Array<{
+    season: string;
+    team?: string;
+    stats: Player["stats"];
+    derived: Player["derived"];
+    sourceId?: string;
+    linked?: boolean;
+  }>;
+  career: {
+    seasonsPlayed: number;
+    stats: Player["stats"];
+    derived: Player["derived"];
+  };
+  meta: { fetchedAt: string };
+};
+
+const profileMemory = new Map<string, PlayerProfile>();
+let teamNamesMemory: Map<number, string> | null = null;
+
+type WarmState = {
+  status: "idle" | "running" | "done";
+  warmed: string[];
+  failed: string[];
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
+let warmState: WarmState = {
+  status: "idle",
+  warmed: [],
+  failed: [],
+  startedAt: null,
+  finishedAt: null
+};
+
 async function fetchJson<T>(url: string, timeoutMs = 10000): Promise<T | null> {
   try {
     const response = await fetch(url, {
@@ -53,6 +99,19 @@ async function fetchJson<T>(url: string, timeoutMs = 10000): Promise<T | null> {
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchResponse(url: string, timeoutMs = 10000): Promise<Response | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "TUFF-Stats-MVP/0.1" },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!response.ok) return null;
+    return response;
   } catch {
     return null;
   }
@@ -462,6 +521,7 @@ async function fetchSeasonPlayers(season: SeasonInfo): Promise<PlayersResponse> 
   const teams = [...new Set(players.map((player) => player.team).filter((team): team is string => Boolean(team)))].sort((a, b) =>
     a.localeCompare(b)
   );
+  const standings = await getStandings(false, season.year);
 
   return {
     players,
@@ -471,29 +531,267 @@ async function fetchSeasonPlayers(season: SeasonInfo): Promise<PlayersResponse> 
       total: players.length,
       teams,
       season: season.year,
-      seasonLabel: season.label
+      seasonLabel: season.label,
+      standings: standings.length ? standings : undefined
     }
   };
+}
+
+type StandingsCacheEntry = {
+  fingerprint: string;
+  standings: TeamStanding[];
+};
+
+const standingsCache = new Map<string, StandingsCacheEntry>();
+
+function standingsCacheName(year: string) {
+  return `standings-${year}.json`;
+}
+
+function readStandingsCache(year: string): StandingsCacheEntry | null {
+  const memory = standingsCache.get(year);
+  if (memory) return memory;
+  const disk = readCacheFile<TeamStanding[]>(standingsCacheName(year));
+  if (!disk?.payload?.length) return null;
+  const entry = { fingerprint: disk.fingerprint, standings: disk.payload };
+  standingsCache.set(year, entry);
+  return entry;
+}
+
+async function fetchStandingsMeta(slug: string) {
+  return fetchJson<Array<{ id: number; slug: string; modified?: string; modified_gmt?: string }>>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/tables?slug=${encodeURIComponent(slug)}&per_page=1&_fields=id,slug,modified,modified_gmt`,
+    12000
+  ).then((rows) => rows?.[0] ?? null);
+}
+
+export async function getStandings(force = false, seasonYear?: string): Promise<TeamStanding[]> {
+  const year = (seasonYear ?? DEFAULT_SEASON).trim() || DEFAULT_SEASON;
+  const cached = readStandingsCache(year);
+  const slugs = standingsSlugCandidates(year);
+
+  let liveFingerprint: string | null = null;
+  if (!force) {
+    for (const slug of slugs) {
+      const meta = await fetchStandingsMeta(slug);
+      if (meta) {
+        liveFingerprint = listFingerprint([meta]);
+        break;
+      }
+    }
+    if (cached && liveFingerprint && cached.fingerprint === liveFingerprint) {
+      return cached.standings;
+    }
+    if (cached && !liveFingerprint) {
+      return cached.standings;
+    }
+  }
+
+  for (const slug of slugs) {
+    const payload = await fetchJson<Array<{
+      slug: string;
+      modified?: string;
+      modified_gmt?: string;
+      data?: Record<string, Record<string, unknown>>;
+    }>>(`${SITE_ORIGIN}/wp-json/sportspress/v2/tables?slug=${encodeURIComponent(slug)}&per_page=1`, 15000);
+
+    const table = payload?.[0];
+    const standings = parseStandingsTable(table?.data);
+    if (!standings.length) continue;
+
+    const fingerprint =
+      liveFingerprint ??
+      listFingerprint([{ id: undefined, slug: table?.slug, modified: table?.modified, modified_gmt: table?.modified_gmt }]) ??
+      `fetched:${new Date().toISOString()}`;
+    standingsCache.set(year, { fingerprint, standings });
+    writeCacheFile(standingsCacheName(year), fingerprint, standings);
+    return standings;
+  }
+
+  return cached?.standings ?? [];
+}
+
+type ScheduleCacheEntry = {
+  fingerprint: string;
+  games: ScheduleGame[];
+};
+
+const scheduleCache = new Map<string, ScheduleCacheEntry>();
+
+function scheduleCacheName(year: string) {
+  return `schedule-${year}.json`;
+}
+
+function readScheduleCache(year: string): ScheduleCacheEntry | null {
+  const memory = scheduleCache.get(year);
+  if (memory) return memory;
+  const disk = readCacheFile<ScheduleGame[]>(scheduleCacheName(year));
+  if (!disk?.payload?.length) return null;
+  const entry = { fingerprint: disk.fingerprint, games: disk.payload };
+  scheduleCache.set(year, entry);
+  return entry;
+}
+
+async function resolveSeasonTaxonomyId(year: string): Promise<number | null> {
+  const seasons = await getSeasons(false, true);
+  const known = seasons.find((season) => season.year === year)?.seasonId;
+  if (known) return known;
+
+  const tax = await fetchJson<Array<{ id: number; name?: string; slug?: string }>>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/seasons?per_page=100`,
+    12000
+  );
+  const hit = tax?.find((season) => season.slug === year || season.name === year);
+  return hit?.id ?? null;
+}
+
+async function loadVenueNameMap(): Promise<Map<number, string>> {
+  const venues = await fetchJson<Array<{ id: number; name?: string; title?: { rendered?: string } }>>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/venues?per_page=100`,
+    12000
+  );
+  const map = new Map<number, string>();
+  for (const venue of venues ?? []) {
+    const name = decodeEntities(venue.name ?? venue.title?.rendered ?? "").trim();
+    if (name) map.set(venue.id, name);
+  }
+  return map;
+}
+
+async function fetchScheduleFingerprint(seasonId: number): Promise<string | null> {
+  const response = await fetchResponse(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/events?seasons=${seasonId}&per_page=1&orderby=modified&order=desc&_fields=id,modified_gmt`,
+    12000
+  );
+  if (!response) return null;
+  const total = response.headers.get("X-WP-Total") ?? "0";
+  const rows = (await response.json()) as Array<{ modified_gmt?: string }>;
+  return `${total}:${rows[0]?.modified_gmt ?? ""}`;
+}
+
+async function fetchAllSeasonEvents(seasonId: number) {
+  const events: Array<{
+    id: number;
+    date?: string;
+    status?: string;
+    link?: string;
+    title?: { rendered?: string };
+    teams?: number[];
+    venues?: number[];
+    main_results?: unknown;
+    results?: Record<string, unknown>;
+    modified_gmt?: string;
+  }> = [];
+
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = await fetchJson<typeof events>(
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/events?seasons=${seasonId}&per_page=50&page=${page}&orderby=date&order=asc&_fields=id,date,status,title,link,teams,venues,main_results,results,modified_gmt`,
+      20000
+    );
+    if (!batch?.length) break;
+    events.push(...batch);
+    if (batch.length < 50) break;
+  }
+  return events;
+}
+
+export type ScheduleResponse = {
+  season: string;
+  games: ScheduleGame[];
+  meta: { fetchedAt: string; total: number };
+};
+
+async function withResolvedTeamNames(games: ScheduleGame[]): Promise<ScheduleGame[]> {
+  if (!games.length) return games;
+  const needsNames = games.some((game) =>
+    game.teams.some((side) => !side.name || side.name === `Team ${side.id}`)
+  );
+  if (!needsNames) return games;
+  const teamNames = await loadTeamNameMap();
+  const hydrated = hydrateScheduleGames(games, teamNames);
+  return hydrated;
+}
+
+export async function getSchedule(force = false, seasonYear?: string): Promise<ScheduleResponse> {
+  const year = (seasonYear ?? DEFAULT_SEASON).trim() || DEFAULT_SEASON;
+  const cached = readScheduleCache(year);
+  const seasonId = await resolveSeasonTaxonomyId(year);
+
+  if (!seasonId) {
+    const games = await withResolvedTeamNames(cached?.games ?? []);
+    return { season: year, games, meta: { fetchedAt: new Date().toISOString(), total: games.length } };
+  }
+
+  const liveFingerprint = force ? null : await fetchScheduleFingerprint(seasonId);
+  if (!force && cached && liveFingerprint && cached.fingerprint === liveFingerprint) {
+    const games = await withResolvedTeamNames(cached.games);
+    if (games !== cached.games) {
+      scheduleCache.set(year, { fingerprint: cached.fingerprint, games });
+      writeCacheFile(scheduleCacheName(year), cached.fingerprint, games);
+    }
+    return { season: year, games, meta: { fetchedAt: new Date().toISOString(), total: games.length } };
+  }
+  if (!force && cached && !liveFingerprint) {
+    const games = await withResolvedTeamNames(cached.games);
+    return { season: year, games, meta: { fetchedAt: new Date().toISOString(), total: games.length } };
+  }
+
+  try {
+    const [events, teamNames, venueNames] = await Promise.all([
+      fetchAllSeasonEvents(seasonId),
+      loadTeamNameMap(),
+      loadVenueNameMap()
+    ]);
+
+    const games = events
+      .map((event) => parseScheduleEvent(event, teamNames, venueNames))
+      .filter((game): game is ScheduleGame => Boolean(game))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (games.length) {
+      const fingerprint = liveFingerprint ?? (await fetchScheduleFingerprint(seasonId)) ?? `fetched:${new Date().toISOString()}`;
+      scheduleCache.set(year, { fingerprint, games });
+      writeCacheFile(scheduleCacheName(year), fingerprint, games);
+    } else if (cached) {
+      const fallback = await withResolvedTeamNames(cached.games);
+      return { season: year, games: fallback, meta: { fetchedAt: new Date().toISOString(), total: fallback.length } };
+    }
+
+    return { season: year, games, meta: { fetchedAt: new Date().toISOString(), total: games.length } };
+  } catch (error) {
+    if (cached) {
+      const fallback = await withResolvedTeamNames(cached.games);
+      return { season: year, games: fallback, meta: { fetchedAt: new Date().toISOString(), total: fallback.length } };
+    }
+    throw error;
+  }
 }
 
 export async function getPlayers(force = false, seasonYear?: string, preferCache = false): Promise<PlayersResponse> {
   const season = await resolveSeason(seasonYear, preferCache && !force);
   const cached = readSeasonCache(season.year);
 
+  const attachStandings = async (data: PlayersResponse, forceStandings = false) => {
+    if (!forceStandings && data.meta.standings?.length) return data;
+    const standings = await getStandings(forceStandings, season.year);
+    if (!standings.length) return data;
+    return { ...data, meta: { ...data.meta, standings } };
+  };
+
   // Career / warm-path reads: trust memory/disk snapshots; skip SportsPress fingerprint chatter.
   if (!force && preferCache && cached) {
-    return cached.data;
+    return attachStandings(cached.data);
   }
 
   const liveFingerprint = force ? null : await getSeasonFingerprint(season);
 
   if (!force && cached && liveFingerprint && cached.fingerprint === liveFingerprint) {
-    return cached.data;
+    return attachStandings(cached.data);
   }
 
   // Source unreachable but we have a prior snapshot — serve it rather than failing.
   if (!force && cached && !liveFingerprint) {
-    return cached.data;
+    return attachStandings(cached.data);
   }
 
   try {
@@ -502,21 +800,108 @@ export async function getPlayers(force = false, seasonYear?: string, preferCache
     writeSeasonCache(season.year, fingerprint, data);
     return data;
   } catch (error) {
-    if (cached) return cached.data;
+    if (cached) return attachStandings(cached.data);
     throw error;
   }
 }
 
 export async function warmSeasonCaches(): Promise<{ warmed: string[]; failed: string[] }> {
-  const seasons = await getSeasons();
-  const warmed: string[] = [];
-  const failed: string[] = [];
+  warmState = {
+    status: "running",
+    warmed: [],
+    failed: [],
+    startedAt: new Date().toISOString(),
+    finishedAt: null
+  };
 
+  try {
+    const seasons = await getSeasons();
+    const warmed: string[] = [];
+    const failed: string[] = [];
+
+    for (const group of chunk(seasons, 2)) {
+      const results = await Promise.all(
+        group.map(async (season) => {
+          try {
+            await getPlayers(false, season.year);
+            await getSchedule(false, season.year);
+            return { year: season.year, ok: true as const };
+          } catch {
+            return { year: season.year, ok: false as const };
+          }
+        })
+      );
+      for (const result of results) {
+        if (result.ok) warmed.push(result.year);
+        else failed.push(result.year);
+        warmState = { ...warmState, warmed: [...warmed], failed: [...failed] };
+      }
+    }
+
+    warmState = {
+      status: "done",
+      warmed,
+      failed,
+      startedAt: warmState.startedAt,
+      finishedAt: new Date().toISOString()
+    };
+    return { warmed, failed };
+  } catch (error) {
+    warmState = {
+      ...warmState,
+      status: "done",
+      finishedAt: new Date().toISOString()
+    };
+    throw error;
+  }
+}
+
+export function getServiceStatus() {
+  const seasons = [...seasonCache.entries()]
+    .map(([year, entry]) => ({
+      year,
+      fetchedAt: entry.data.meta.fetchedAt,
+      playerCount: entry.data.players.length,
+      fingerprint: entry.fingerprint.slice(0, 48)
+    }))
+    .sort((a, b) => Number(b.year) - Number(a.year));
+
+  return {
+    ok: true,
+    service: "tuff-stats-api",
+    uptimeSeconds: Math.round(process.uptime()),
+    warm: warmState,
+    cache: {
+      seasonsCached: seasons.length,
+      profilesCached: profileMemory.size,
+      seasons
+    }
+  };
+}
+
+export async function refreshSeasonData(seasonYear?: string) {
+  profileMemory.clear();
+  teamNamesMemory = null;
+  standingsCache.clear();
+  scheduleCache.clear();
+
+  if (seasonYear) {
+    await getStandings(true, seasonYear);
+    await getSchedule(true, seasonYear);
+    const data = await getPlayers(true, seasonYear);
+    return { refreshed: [data.meta.season], failed: [] as string[] };
+  }
+
+  const seasons = await getSeasons(true);
+  const refreshed: string[] = [];
+  const failed: string[] = [];
   for (const group of chunk(seasons, 2)) {
     const results = await Promise.all(
       group.map(async (season) => {
         try {
-          await getPlayers(false, season.year);
+          await getStandings(true, season.year);
+          await getSchedule(true, season.year);
+          await getPlayers(true, season.year);
           return { year: season.year, ok: true as const };
         } catch {
           return { year: season.year, ok: false as const };
@@ -524,38 +909,12 @@ export async function warmSeasonCaches(): Promise<{ warmed: string[]; failed: st
       })
     );
     for (const result of results) {
-      if (result.ok) warmed.push(result.year);
+      if (result.ok) refreshed.push(result.year);
       else failed.push(result.year);
     }
   }
-
-  return { warmed, failed };
+  return { refreshed, failed };
 }
-
-export type PlayerProfile = {
-  id: string;
-  sourceId: string;
-  name: string;
-  number?: number | string;
-  profileUrl?: string;
-  currentTeam?: string;
-  teams: string[];
-  seasons: Array<{
-    season: string;
-    team?: string;
-    stats: Player["stats"];
-    derived: Player["derived"];
-  }>;
-  career: {
-    seasonsPlayed: number;
-    stats: Player["stats"];
-    derived: Player["derived"];
-  };
-  meta: { fetchedAt: string };
-};
-
-const profileMemory = new Map<string, PlayerProfile>();
-let teamNamesMemory: Map<number, string> | null = null;
 
 async function loadTeamNameMap(): Promise<Map<number, string>> {
   if (teamNamesMemory?.size) return teamNamesMemory;
@@ -565,8 +924,9 @@ async function loadTeamNameMap(): Promise<Map<number, string>> {
   );
   const map = new Map<number, string>();
   for (const team of teams ?? []) {
+    const id = Number(team.id);
     const name = decodeEntities(team.title?.rendered ?? "").trim();
-    if (name) map.set(team.id, name);
+    if (Number.isFinite(id) && name) map.set(id, name);
   }
   if (map.size) teamNamesMemory = map;
   return map;
@@ -586,20 +946,6 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     data: readSeasonCache(season.year)?.data ?? null
   }));
 
-  const appearances = seasonResults
-    .map(({ season, data }) => {
-      const match = data?.players.find((player) => player.sourceId === sourceId);
-      if (!match) return null;
-      return {
-        season: season.year,
-        team: match.team,
-        stats: match.stats,
-        derived: match.derived
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row))
-    .sort((a, b) => Number(b.season) - Number(a.season));
-
   const [teamNames, spPlayer] = await Promise.all([
     loadTeamNameMap(),
     fetchJson<{
@@ -613,12 +959,32 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     }>(`${SITE_ORIGIN}/wp-json/sportspress/v2/players/${sourceId}`, 12000)
   ]);
 
-  if (!appearances.length && !spPlayer) return null;
-
   const resolvedName =
     decodeEntities(spPlayer?.title?.rendered ?? "").trim() ||
     seasonResults.flatMap((row) => row.data?.players ?? []).find((player) => player.sourceId === sourceId)?.name ||
     `Player ${sourceId}`;
+
+  const candidates = seasonResults.flatMap(({ season, data }) =>
+    (data?.players ?? [])
+      .filter((player) => player.sourceId)
+      .map((player) => ({
+        season: season.year,
+        sourceId: String(player.sourceId),
+        name: player.name,
+        team: player.team,
+        stats: player.stats,
+        derived: player.derived
+      }))
+  );
+
+  const { appearances, linkedSourceIds } = collectCareerAppearances(
+    sourceId,
+    resolvedName,
+    candidates,
+    spPlayer?.number
+  );
+
+  if (!appearances.length && !spPlayer) return null;
 
   const careerPlayer = careerFromSeasons(resolvedName, appearances, sourceId);
   const currentTeam =
@@ -637,6 +1003,7 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     profileUrl: spPlayer?.link,
     currentTeam,
     teams,
+    linkedSourceIds: linkedSourceIds.length ? linkedSourceIds : undefined,
     seasons: appearances,
     career: {
       seasonsPlayed: appearances.length,

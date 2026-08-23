@@ -31,6 +31,8 @@ export interface SeasonAppearance {
   team?: string;
   stats: Stats;
   derived: Player["derived"];
+  sourceId?: string;
+  linked?: boolean;
 }
 
 export interface PlayerProfile {
@@ -41,6 +43,7 @@ export interface PlayerProfile {
   profileUrl?: string;
   currentTeam?: string;
   teams: string[];
+  linkedSourceIds?: string[];
   seasons: SeasonAppearance[];
   career: {
     seasonsPlayed: number;
@@ -48,6 +51,43 @@ export interface PlayerProfile {
     derived: Player["derived"];
   };
   meta: { fetchedAt: string };
+}
+
+export interface TeamStanding {
+  name: string;
+  pos?: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pct: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  netPoints: number;
+  standingsPoints: number;
+  streak?: string;
+}
+
+export interface ScheduleSide {
+  id: number;
+  name: string;
+  score?: number;
+  outcome?: string;
+}
+
+export interface ScheduleGame {
+  id: number;
+  date: string;
+  status: "final" | "upcoming" | "unknown";
+  title: string;
+  link?: string;
+  venue?: string;
+  teams: ScheduleSide[];
+}
+
+export interface ScheduleResponse {
+  season: string;
+  games: ScheduleGame[];
+  meta: { fetchedAt: string; total: number };
 }
 
 export interface PlayersResponse {
@@ -59,5 +99,6 @@ export interface PlayersResponse {
     teams: string[];
     season: string;
     seasonLabel: string;
+    standings?: TeamStanding[];
   };
 }

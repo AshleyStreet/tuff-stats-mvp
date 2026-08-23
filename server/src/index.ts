@@ -3,26 +3,82 @@ import cors from "cors";
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { filterAndSortPlayers } from "./lib/query.js";
-import { getPlayerProfile, getPlayers, getSeasons, warmSeasonCaches } from "./source.js";
+import {
+  getPlayerProfile,
+  getPlayers,
+  getSchedule,
+  getSeasons,
+  getServiceStatus,
+  refreshSeasonData,
+  warmSeasonCaches
+} from "./source.js";
 import type { StatKey } from "./types.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, "../../client/dist");
+const adminToken = process.env.ADMIN_TOKEN?.trim() ?? "";
 
 app.use(cors());
 app.use(express.json());
 
+function tokensMatch(provided: string, expected: string) {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
+}
+
+function isAdmin(req: express.Request) {
+  if (!adminToken) return false;
+  const header = req.get("x-admin-token") ?? "";
+  const bearer = (req.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return tokensMatch(header, adminToken) || tokensMatch(bearer, adminToken);
+}
+
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "tuff-stats-api" });
+  const status = getServiceStatus();
+  res.json({
+    ok: true,
+    service: status.service,
+    uptimeSeconds: status.uptimeSeconds,
+    warm: status.warm.status,
+    seasonsCached: status.cache.seasonsCached
+  });
+});
+
+app.get("/api/status", (_req, res) => {
+  res.json(getServiceStatus());
+});
+
+app.post("/api/admin/refresh", async (req, res) => {
+  if (!adminToken) {
+    return res.status(503).json({ error: "Admin refresh is not configured (set ADMIN_TOKEN)" });
+  }
+  if (!isAdmin(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const season = String(req.body?.season ?? req.query.season ?? "").trim();
+    const result = await refreshSeasonData(season || undefined);
+    return res.json({ ok: true, ...result, status: getServiceStatus() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(502).json({ error: "Unable to refresh TUFF data", detail: message });
+  }
 });
 
 app.get("/api/seasons", async (req, res) => {
   try {
-    const seasons = await getSeasons(req.query.refresh === "1");
+    const force = req.query.refresh === "1";
+    if (force && !isAdmin(req)) {
+      return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
+    }
+    const seasons = await getSeasons(force);
     res.json({ seasons, defaultSeason: seasons[0]?.year ?? "2026" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -30,10 +86,29 @@ app.get("/api/seasons", async (req, res) => {
   }
 });
 
-app.get("/api/players", async (req, res) => {
+app.get("/api/schedule", async (req, res) => {
   try {
     const season = String(req.query.season ?? "").trim();
-    const data = await getPlayers(req.query.refresh === "1", season || undefined);
+    const force = req.query.refresh === "1";
+    if (force && !isAdmin(req)) {
+      return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
+    }
+    const data = await getSchedule(force, season || undefined);
+    return res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(502).json({ error: "Unable to load TUFF schedule", detail: message });
+  }
+});
+
+app.get("/api/players", async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    if (force && !isAdmin(req)) {
+      return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
+    }
+    const season = String(req.query.season ?? "").trim();
+    const data = await getPlayers(force, season || undefined);
     const players = filterAndSortPlayers(data.players, {
       search: String(req.query.search ?? ""),
       team: String(req.query.team ?? ""),
@@ -88,6 +163,9 @@ app.listen(port, "0.0.0.0", () => {
   console.log(`TUFF API listening on http://localhost:${port}`);
   if (fs.existsSync(clientDist)) {
     console.log(`Serving web app from ${clientDist}`);
+  }
+  if (!adminToken) {
+    console.log("ADMIN_TOKEN not set — /api/admin/refresh disabled");
   }
   void warmSeasonCaches()
     .then(({ warmed, failed }) => {

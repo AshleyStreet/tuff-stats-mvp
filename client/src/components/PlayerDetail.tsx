@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ExternalLink, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerProfile, peekPlayerProfile } from "../api";
 import type { Player, PlayerProfile, SeasonAppearance } from "../types";
+import { CareerChart } from "./CareerChart";
 
 interface Props {
   player: Player;
@@ -86,6 +87,7 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
   const career = profile?.career;
   const displayName = profile?.name ?? player.name;
   const teamLabel = profile?.currentTeam ?? player.team;
+  const linkedCount = profile?.linkedSourceIds?.length ?? 0;
 
   return (
     <aside className="detail-panel">
@@ -127,6 +129,10 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
         </div>
       )}
 
+      {profile && profile.seasons.length > 1 && (
+        <CareerChart seasons={profile.seasons} selectedSeason={selectedSeason} />
+      )}
+
       {profile && profile.teams.length > 0 && (
         <section>
           <h3><Trophy size={17} /> Teams</h3>
@@ -143,20 +149,25 @@ export function PlayerDetail({ player, activeSeason, onClose, onSelectSeason }: 
       {profile && profile.seasons.length > 0 && (
         <section>
           <h3><CalendarDays size={17} /> Career by season</h3>
+          {linkedCount > 0 && (
+            <p className="career-note">
+              Includes {linkedCount} linked roster id{linkedCount === 1 ? "" : "s"} matched by jersey or team continuity.
+            </p>
+          )}
           <div className="season-table">
             <div className="season-table-head">
               <span>Year</span><span>Team</span><span>G</span><span>Pts</span><span>TD</span>
             </div>
             {profile.seasons.map((row) => (
               <button
-                key={row.season}
+                key={`${row.season}-${row.sourceId ?? "primary"}`}
                 className={`season-table-row${row.season === selectedSeason ? " active" : ""}`}
                 onClick={() => {
                   setSelectedSeason(row.season);
                   onSelectSeason?.(row.season);
                 }}
               >
-                <span>{row.season}</span>
+                <span>{row.season}{row.linked ? "*" : ""}</span>
                 <span>{row.team ?? "—"}</span>
                 <span>{row.stats.gms}</span>
                 <span>{row.derived.totalPoints}</span>

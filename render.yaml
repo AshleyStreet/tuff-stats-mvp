@@ -15,3 +15,22 @@ services:
         value: https://www.playtuff.ca/list/2026-tuff-stats/
       - key: TUFF_LIST_SLUG
         value: 2026-tuff-stats
+      - key: ADMIN_TOKEN
+        sync: false
+
+  # Pings the web service so free-tier instances stay warm.
+  - type: cron
+    name: tuff-stats-keepalive
+    runtime: node
+    plan: free
+    schedule: "*/12 * * * *"
+    buildCommand: echo "keepalive"
+    startCommand: node scripts/keepalive.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: KEEPALIVE_URL
+        fromService:
+          name: tuff-stats
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
