@@ -11,8 +11,6 @@ services:
         value: "20"
       - key: NODE_ENV
         value: production
-      - key: CACHE_TTL_MS
-        value: "300000"
       - key: TUFF_STATS_URL
         value: https://www.playtuff.ca/list/2026-tuff-stats/
       - key: TUFF_LIST_SLUG

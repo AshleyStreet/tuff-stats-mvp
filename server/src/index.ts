@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { filterAndSortPlayers } from "./lib/query.js";
-import { getPlayers, getSeasons } from "./source.js";
+import { getPlayerProfile, getPlayers, getSeasons, warmSeasonCaches } from "./source.js";
 import type { StatKey } from "./types.js";
 
 const app = express();
@@ -50,14 +50,12 @@ app.get("/api/players", async (req, res) => {
 
 app.get("/api/players/:id", async (req, res) => {
   try {
-    const season = String(req.query.season ?? "").trim();
-    const data = await getPlayers(false, season || undefined);
-    const player = data.players.find((candidate) => candidate.id === req.params.id);
-    if (!player) return res.status(404).json({ error: "Player not found" });
-    return res.json(player);
+    const profile = await getPlayerProfile(String(req.params.id));
+    if (!profile) return res.status(404).json({ error: "Player not found" });
+    return res.json(profile);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(502).json({ error: "Unable to load TUFF stats", detail: message });
+    return res.status(502).json({ error: "Unable to load player profile", detail: message });
   }
 });
 
@@ -91,4 +89,11 @@ app.listen(port, "0.0.0.0", () => {
   if (fs.existsSync(clientDist)) {
     console.log(`Serving web app from ${clientDist}`);
   }
+  void warmSeasonCaches()
+    .then(({ warmed, failed }) => {
+      console.log(`Season cache warm: ${warmed.length} ready${failed.length ? `, ${failed.length} failed` : ""}`);
+    })
+    .catch((error) => {
+      console.warn("Season cache warm failed:", error instanceof Error ? error.message : error);
+    });
 });

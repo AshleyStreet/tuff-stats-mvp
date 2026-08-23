@@ -112,13 +112,15 @@ h1 { font:800 42px/1 'Barlow Condensed'; text-transform:uppercase; margin:7px 0 
 .mini-stat strong { display:block;margin-top:3px;font:700 23px 'Barlow Condensed'; }
 .card-footer { display:flex;justify-content:space-between;color:#8f9296;font-size:10px;padding-top:13px; }
 
-.detail-panel { position:fixed; right:0; top:82px; bottom:0; width:385px; z-index:15; overflow:auto; border-left:1px solid #393b3d; padding:31px 25px; background:rgba(18,19,20,.985); box-shadow:-30px 0 60px rgba(0,0,0,.35); backdrop-filter:blur(18px); }
+.detail-panel { position:fixed; right:0; top:82px; bottom:0; width:400px; z-index:15; overflow:auto; border-left:1px solid #393b3d; padding:31px 25px; background:rgba(18,19,20,.985); box-shadow:-30px 0 60px rgba(0,0,0,.35); backdrop-filter:blur(18px); }
 .icon-button { border:0;background:transparent;cursor:pointer; }
 .close { position:absolute;right:17px;top:15px;color:#a9abad; }
 .detail-hero { display:flex;align-items:center;gap:14px;padding:12px 0 22px; }
-.detail-hero h2 { margin:4px 0 2px;font:800 34px 'Barlow Condensed';text-transform:uppercase; }
+.detail-hero h2 { margin:4px 0 2px;font:800 34px 'Barlow Condensed';text-transform:uppercase; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.jersey-number { color:var(--red-bright); font-size:22px; letter-spacing:0.5px; }
 .detail-hero p { margin:0;color:#9b9da1;font-size:11px; }
 .hero-kpis { display:grid;grid-template-columns:repeat(3,1fr);background:#0c0d0d;border:1px solid #303235;border-radius:7px;margin-bottom:23px; }
+.hero-kpis.compact { margin-top:10px; margin-bottom:8px; }
 .hero-kpis div { padding:14px 10px;text-align:center;border-right:1px solid #292a2c; }
 .hero-kpis div:last-child { border:0; }
 .hero-kpis span { display:block;color:#777b80;font:600 9px 'Barlow Condensed'; }
@@ -128,6 +130,18 @@ h1 { font:800 42px/1 'Barlow Condensed'; text-transform:uppercase; margin:7px 0 
 .detail-panel h3 svg { color:var(--red-bright); }
 .detail-row { display:flex;justify-content:space-between;gap:20px;padding:7px 0;border-bottom:1px solid #292b2c;color:#b5b7b9;font-size:12px; }
 .detail-row strong { color:white; }
+.profile-loading, .profile-error { margin-bottom:16px; color:#9b9da1; font-size:12px; }
+.profile-error { color:#ff858a; }
+.team-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.team-chip { border:1px solid #343638; border-radius:999px; padding:6px 10px; font:600 11px 'Barlow Condensed'; letter-spacing:0.4px; text-transform:uppercase; color:#c8c8c8; }
+.team-chip.current { border-color:var(--red); color:white; background:rgba(227,27,35,.12); }
+.season-table { border:1px solid #303235; border-radius:7px; overflow:hidden; background:#0f1011; }
+.season-table-head, .season-table-row { display:grid; grid-template-columns:54px 1fr 36px 40px 36px; gap:8px; align-items:center; padding:9px 11px; }
+.season-table-head { color:#777b80; font:700 10px 'Barlow Condensed'; letter-spacing:0.8px; text-transform:uppercase; border-bottom:1px solid #292b2c; }
+.season-table-row { width:100%; border:0; border-bottom:1px solid #232526; background:transparent; color:#d7d7d7; text-align:left; cursor:pointer; font-size:12px; }
+.season-table-row:last-child { border-bottom:0; }
+.season-table-row:hover, .season-table-row.active { background:rgba(227,27,35,.1); color:white; }
+.season-detail-label { margin-top:22px; color:#ff6e73; font:700 11px 'Barlow Condensed'; letter-spacing:1px; text-transform:uppercase; }
 .source-link { display:flex;justify-content:center;align-items:center;gap:7px;margin-top:28px;padding:11px;border:1px solid #343638;border-radius:5px;color:#ddd;text-decoration:none;font:700 12px 'Barlow Condensed';text-transform:uppercase; }
 .source-link:hover { border-color:var(--red); }
 .loading,.empty,.error-card { padding:30px;border:1px solid #2e3032;border-radius:7px;background:#121314;color:#aaa; }

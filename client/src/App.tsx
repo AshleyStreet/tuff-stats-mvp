@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Trophy } from "lucide-react";
-import { getPlayers, getSeasons } from "./api";
+import { getPlayers, getSeasons, peekSeasonPlayers } from "./api";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
+import { filterAndSortPlayers } from "./lib/query";
 import type { Player, PlayersResponse, SeasonInfo, StatKey } from "./types";
 
 const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
@@ -40,27 +41,53 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setLoading(true);
-      getPlayers(search, sort, team, season)
-        .then((result) => {
-          setData(result);
-          setError(null);
-          if (selected) {
-            setSelected(result.players.find((p) => p.id === selected.id) ?? null);
-          }
-        })
-        .catch((err: Error) => setError(err.message))
-        .finally(() => setLoading(false));
-    }, 180);
-    return () => window.clearTimeout(timeout);
-  }, [search, sort, team, season]);
+    let cancelled = false;
+    const cached = peekSeasonPlayers(season);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
-  const leaders = useMemo(() => data?.players.slice(0, 5) ?? [], [data]);
+    setLoading(true);
+    getPlayers(season)
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setError(null);
+        setSelected((current) => {
+          if (!current) return null;
+          return (
+            result.players.find((player) =>
+              player.sourceId && current.sourceId
+                ? player.sourceId === current.sourceId
+                : player.id === current.id
+            ) ?? current
+          );
+        });
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [season]);
+
+  const players = useMemo(
+    () => filterAndSortPlayers(data?.players ?? [], { search, team, sort }),
+    [data?.players, search, team, sort]
+  );
+
+  const leaders = useMemo(() => players.slice(0, 5), [players]);
   const teams = data?.meta.teams ?? [];
   const sortLabel = sorts.find((item) => item.key === sort)?.label ?? "Leaders";
   const seasonLabel = data?.meta.seasonLabel ?? `${season} Season`;
-  const statValue = (player: Player) => sort === "totalPoints" ? player.derived.totalPoints : player.stats[sort];
+  const statValue = (player: Player) => (sort === "totalPoints" ? player.derived.totalPoints : player.stats[sort]);
   const filterLabel = team || (search ? `“${search}”` : "all teams");
 
   return (
@@ -125,7 +152,7 @@ export default function App() {
             <div>
               <div className="eyebrow">{seasonLabel.toUpperCase()}</div>
               <h1>Player stats</h1>
-              <p>{data?.meta.total ?? 0} players · {filterLabel} · sorted by {sortLabel.toLowerCase()}</p>
+              <p>{players.length} players · {filterLabel} · sorted by {sortLabel.toLowerCase()}</p>
             </div>
             {data && <span className="source-badge">Live · {data.meta.source === "sportspress" ? "SportsPress API" : "TUFF table"}</span>}
           </div>
@@ -147,20 +174,30 @@ export default function App() {
 
           {!loading && (
             <div className="player-grid">
-              {data?.players.map((player) => (
+              {players.map((player) => (
                 <PlayerCard key={player.id} player={player} selected={selected?.id === player.id} onSelect={setSelected} />
               ))}
             </div>
           )}
 
-          {!loading && data?.players.length === 0 && (
+          {!loading && players.length === 0 && (
             <div className="empty">
               No players match{search ? ` “${search}”` : ""}{team ? `${search ? " on" : ""} ${team}` : ""} in {season}.
             </div>
           )}
         </main>
 
-        {selected && <PlayerDetail player={selected} onClose={() => setSelected(null)} />}
+        {selected && (
+          <PlayerDetail
+            player={selected}
+            activeSeason={season}
+            onClose={() => setSelected(null)}
+            onSelectSeason={(year) => {
+              setSeason(year);
+              setTeam("");
+            }}
+          />
+        )}
       </div>
     </div>
   );

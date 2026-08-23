@@ -11,11 +11,13 @@ import {
   toNumber,
   yearFromStatsList
 } from "./lib/stats.js";
+import { careerFromSeasons, extractSourceId } from "./lib/profile.js";
+import { listFingerprint, readCacheFile, writeCacheFile } from "./lib/cache.js";
 import type { Player, PlayersResponse, SeasonInfo } from "./types.js";
 
 const SITE_ORIGIN = new URL(process.env.TUFF_STATS_URL ?? "https://www.playtuff.ca/list/2026-tuff-stats/").origin;
-const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS ?? 300_000);
 const DEFAULT_SEASON = "2026";
+const LIST_META_FIELDS = "id,slug,title,seasons,link,modified,modified_gmt";
 
 type SpList = {
   id: number;
@@ -24,11 +26,23 @@ type SpList = {
   seasons?: number[];
   data?: Record<string, Record<string, unknown>>;
   link?: string;
+  modified?: string;
+  modified_gmt?: string;
 };
 
-const cache = new Map<string, { expiresAt: number; data: PlayersResponse }>();
-let seasonsCache: { expiresAt: number; seasons: SeasonInfo[] } | null = null;
-let listsCache: { expiresAt: number; lists: SpList[] } | null = null;
+type SeasonCacheEntry = {
+  fingerprint: string;
+  data: PlayersResponse;
+};
+
+type ListsCacheEntry = {
+  fingerprint: string;
+  lists: SpList[];
+};
+
+const seasonCache = new Map<string, SeasonCacheEntry>();
+let seasonsMemory: { fingerprint: string; seasons: SeasonInfo[] } | null = null;
+let listsMemory: ListsCacheEntry | null = null;
 let listsInflight: Promise<SpList[]> | null = null;
 
 async function fetchJson<T>(url: string, timeoutMs = 10000): Promise<T | null> {
@@ -44,22 +58,58 @@ async function fetchJson<T>(url: string, timeoutMs = 10000): Promise<T | null> {
   }
 }
 
-async function fetchAllLists(): Promise<SpList[]> {
-  if (listsCache && Date.now() < listsCache.expiresAt) return listsCache.lists;
+async function fetchStatsListMeta(slug: string): Promise<SpList | null> {
+  const payload = await fetchJson<SpList[]>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?slug=${encodeURIComponent(slug)}&per_page=1&_fields=${LIST_META_FIELDS}`,
+    12000
+  );
+  return payload?.[0] ?? null;
+}
+
+async function fetchAllLists(force = false): Promise<SpList[]> {
+  if (!force && listsMemory) {
+    const liveFingerprint = await fetchListsFingerprint();
+    if (liveFingerprint && liveFingerprint === listsMemory.fingerprint) {
+      return listsMemory.lists;
+    }
+  } else if (!force && !listsMemory) {
+    const disk = readCacheFile<SpList[]>("lists.json");
+    if (disk?.payload?.length) {
+      const liveFingerprint = await fetchListsFingerprint();
+      if (liveFingerprint && liveFingerprint === disk.fingerprint) {
+        listsMemory = { fingerprint: disk.fingerprint, lists: disk.payload };
+        return disk.payload;
+      }
+    }
+  }
+
   if (listsInflight) return listsInflight;
 
   listsInflight = (async () => {
     const lists: SpList[] = [];
     for (let page = 1; page <= 5; page += 1) {
       const batch = await fetchJson<SpList[]>(
-        `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?per_page=100&page=${page}`,
+        `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?per_page=100&page=${page}&_fields=${LIST_META_FIELDS}`,
         15000
       );
       if (!batch?.length) break;
       lists.push(...batch);
       if (batch.length < 100) break;
     }
-    listsCache = { expiresAt: Date.now() + CACHE_TTL_MS, lists };
+
+    if (lists.length) {
+      const fingerprint = listFingerprint(lists);
+      listsMemory = { fingerprint, lists };
+      writeCacheFile("lists.json", fingerprint, lists);
+    } else if (listsMemory) {
+      return listsMemory.lists;
+    } else {
+      const disk = readCacheFile<SpList[]>("lists.json");
+      if (disk?.payload?.length) {
+        listsMemory = { fingerprint: disk.fingerprint, lists: disk.payload };
+        return disk.payload;
+      }
+    }
     return lists;
   })().finally(() => {
     listsInflight = null;
@@ -68,14 +118,22 @@ async function fetchAllLists(): Promise<SpList[]> {
   return listsInflight;
 }
 
-export async function getSeasons(force = false): Promise<SeasonInfo[]> {
-  if (!force && seasonsCache && Date.now() < seasonsCache.expiresAt) {
-    return seasonsCache.seasons;
+async function fetchListsFingerprint(): Promise<string | null> {
+  const lists: SpList[] = [];
+  for (let page = 1; page <= 5; page += 1) {
+    const batch = await fetchJson<SpList[]>(
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?per_page=100&page=${page}&_fields=id,slug,modified,modified_gmt`,
+      12000
+    );
+    if (!batch?.length) break;
+    lists.push(...batch);
+    if (batch.length < 100) break;
   }
+  return lists.length ? listFingerprint(lists) : null;
+}
 
-  const lists = await fetchAllLists();
+function seasonsFromLists(lists: SpList[]): SeasonInfo[] {
   const byYear = new Map<string, SeasonInfo>();
-
   for (const list of lists) {
     if (!isStatsList(list)) continue;
     const year = yearFromStatsList(list);
@@ -88,16 +146,63 @@ export async function getSeasons(force = false): Promise<SeasonInfo[]> {
       url: list.link ?? `${SITE_ORIGIN}/list/${list.slug}/`
     });
   }
-
-  const seasons = [...byYear.values()].sort((a, b) => Number(b.year) - Number(a.year));
-  seasonsCache = { expiresAt: Date.now() + CACHE_TTL_MS, seasons };
-  return seasons;
+  return [...byYear.values()].sort((a, b) => Number(b.year) - Number(a.year));
 }
 
-async function resolveSeason(year?: string): Promise<SeasonInfo> {
-  const seasons = await getSeasons();
+export async function getSeasons(force = false, preferCache = false): Promise<SeasonInfo[]> {
+  if (!force && preferCache) {
+    if (seasonsMemory?.seasons.length) return seasonsMemory.seasons;
+    const disk = readCacheFile<SeasonInfo[]>("seasons.json");
+    if (disk?.payload?.length) {
+      seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
+      return disk.payload;
+    }
+  }
+
+  if (!force && seasonsMemory) {
+    const liveFingerprint = await fetchListsFingerprint();
+    if (liveFingerprint && liveFingerprint === seasonsMemory.fingerprint) {
+      return seasonsMemory.seasons;
+    }
+  }
+
+  if (!force && !seasonsMemory) {
+    const disk = readCacheFile<SeasonInfo[]>("seasons.json");
+    if (disk?.payload?.length) {
+      const liveFingerprint = await fetchListsFingerprint();
+      if (liveFingerprint && liveFingerprint === disk.fingerprint) {
+        seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
+        return disk.payload;
+      }
+    }
+  }
+
+  const lists = await fetchAllLists(force);
+  const seasons = seasonsFromLists(lists);
+  if (seasons.length) {
+    const fingerprint = listFingerprint(lists);
+    seasonsMemory = { fingerprint, seasons };
+    writeCacheFile("seasons.json", fingerprint, seasons);
+    return seasons;
+  }
+
+  const disk = readCacheFile<SeasonInfo[]>("seasons.json");
+  if (disk?.payload?.length) {
+    seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
+    return disk.payload;
+  }
+  return seasonsMemory?.seasons ?? [];
+}
+
+async function resolveSeason(year?: string, preferCache = false): Promise<SeasonInfo> {
+  let seasons = await getSeasons(false, preferCache);
   const requested = year?.trim() || DEFAULT_SEASON;
-  return seasons.find((season) => season.year === requested) ?? seasons[0] ?? {
+  let match = seasons.find((season) => season.year === requested);
+  if (!match && requested !== DEFAULT_SEASON && !preferCache) {
+    seasons = await getSeasons(true);
+    match = seasons.find((season) => season.year === requested);
+  }
+  return match ?? seasons[0] ?? {
     year: DEFAULT_SEASON,
     label: `${DEFAULT_SEASON} Season`,
     slug: `${DEFAULT_SEASON}-tuff-stats`,
@@ -296,11 +401,48 @@ async function fromHtml(season: SeasonInfo): Promise<Player[]> {
   return players;
 }
 
-export async function getPlayers(force = false, seasonYear?: string): Promise<PlayersResponse> {
-  const season = await resolveSeason(seasonYear);
-  const cached = cache.get(season.year);
-  if (!force && cached && Date.now() < cached.expiresAt) return cached.data;
+async function getSeasonFingerprint(season: SeasonInfo): Promise<string | null> {
+  const statsMeta = await fetchStatsListMeta(season.slug);
+  if (!statsMeta) return null;
 
+  let rosterMetas: SpList[] = [];
+  try {
+    const lists = await fetchAllLists();
+    rosterMetas = lists.filter(
+      (list) => !isStatsList(list) && list.slug.toLowerCase().startsWith(`${season.year}-`)
+    );
+  } catch {
+    rosterMetas = [];
+  }
+
+  return listFingerprint([statsMeta, ...rosterMetas]);
+}
+
+function seasonCacheName(year: string) {
+  return `season-${year}.json`;
+}
+
+function readSeasonCache(year: string): SeasonCacheEntry | null {
+  const memory = seasonCache.get(year);
+  if (memory) return memory;
+  const disk = readCacheFile<PlayersResponse>(seasonCacheName(year));
+  if (!disk?.payload?.players?.length) return null;
+  const entry = { fingerprint: disk.fingerprint, data: disk.payload };
+  seasonCache.set(year, entry);
+  return entry;
+}
+
+function writeSeasonCache(year: string, fingerprint: string, data: PlayersResponse) {
+  const previous = seasonCache.get(year);
+  const entry = { fingerprint, data };
+  seasonCache.set(year, entry);
+  writeCacheFile(seasonCacheName(year), fingerprint, data);
+  if (previous && previous.fingerprint !== fingerprint) {
+    profileMemory.clear();
+  }
+}
+
+async function fetchSeasonPlayers(season: SeasonInfo): Promise<PlayersResponse> {
   let players: Player[] | null = null;
   let source: PlayersResponse["meta"]["source"] = "html";
 
@@ -321,7 +463,7 @@ export async function getPlayers(force = false, seasonYear?: string): Promise<Pl
     a.localeCompare(b)
   );
 
-  const data: PlayersResponse = {
+  return {
     players,
     meta: {
       source,
@@ -332,7 +474,178 @@ export async function getPlayers(force = false, seasonYear?: string): Promise<Pl
       seasonLabel: season.label
     }
   };
+}
 
-  cache.set(season.year, { expiresAt: Date.now() + CACHE_TTL_MS, data });
-  return data;
+export async function getPlayers(force = false, seasonYear?: string, preferCache = false): Promise<PlayersResponse> {
+  const season = await resolveSeason(seasonYear, preferCache && !force);
+  const cached = readSeasonCache(season.year);
+
+  // Career / warm-path reads: trust memory/disk snapshots; skip SportsPress fingerprint chatter.
+  if (!force && preferCache && cached) {
+    return cached.data;
+  }
+
+  const liveFingerprint = force ? null : await getSeasonFingerprint(season);
+
+  if (!force && cached && liveFingerprint && cached.fingerprint === liveFingerprint) {
+    return cached.data;
+  }
+
+  // Source unreachable but we have a prior snapshot — serve it rather than failing.
+  if (!force && cached && !liveFingerprint) {
+    return cached.data;
+  }
+
+  try {
+    const data = await fetchSeasonPlayers(season);
+    const fingerprint = liveFingerprint ?? (await getSeasonFingerprint(season)) ?? `fetched:${data.meta.fetchedAt}`;
+    writeSeasonCache(season.year, fingerprint, data);
+    return data;
+  } catch (error) {
+    if (cached) return cached.data;
+    throw error;
+  }
+}
+
+export async function warmSeasonCaches(): Promise<{ warmed: string[]; failed: string[] }> {
+  const seasons = await getSeasons();
+  const warmed: string[] = [];
+  const failed: string[] = [];
+
+  for (const group of chunk(seasons, 2)) {
+    const results = await Promise.all(
+      group.map(async (season) => {
+        try {
+          await getPlayers(false, season.year);
+          return { year: season.year, ok: true as const };
+        } catch {
+          return { year: season.year, ok: false as const };
+        }
+      })
+    );
+    for (const result of results) {
+      if (result.ok) warmed.push(result.year);
+      else failed.push(result.year);
+    }
+  }
+
+  return { warmed, failed };
+}
+
+export type PlayerProfile = {
+  id: string;
+  sourceId: string;
+  name: string;
+  number?: number | string;
+  profileUrl?: string;
+  currentTeam?: string;
+  teams: string[];
+  seasons: Array<{
+    season: string;
+    team?: string;
+    stats: Player["stats"];
+    derived: Player["derived"];
+  }>;
+  career: {
+    seasonsPlayed: number;
+    stats: Player["stats"];
+    derived: Player["derived"];
+  };
+  meta: { fetchedAt: string };
+};
+
+const profileMemory = new Map<string, PlayerProfile>();
+let teamNamesMemory: Map<number, string> | null = null;
+
+async function loadTeamNameMap(): Promise<Map<number, string>> {
+  if (teamNamesMemory?.size) return teamNamesMemory;
+
+  const teams = await fetchJson<Array<{ id: number; title?: { rendered?: string } }>>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/teams?per_page=100`
+  );
+  const map = new Map<number, string>();
+  for (const team of teams ?? []) {
+    const name = decodeEntities(team.title?.rendered ?? "").trim();
+    if (name) map.set(team.id, name);
+  }
+  if (map.size) teamNamesMemory = map;
+  return map;
+}
+
+export async function getPlayerProfile(playerId: string): Promise<PlayerProfile | null> {
+  const sourceId = extractSourceId(playerId);
+  if (!sourceId) return null;
+
+  const cachedProfile = profileMemory.get(sourceId);
+  if (cachedProfile) return cachedProfile;
+
+  const seasons = await getSeasons(false, true);
+  // Assemble from warm season snapshots only — never kick off N full season fetches here.
+  const seasonResults = seasons.map((season) => ({
+    season,
+    data: readSeasonCache(season.year)?.data ?? null
+  }));
+
+  const appearances = seasonResults
+    .map(({ season, data }) => {
+      const match = data?.players.find((player) => player.sourceId === sourceId);
+      if (!match) return null;
+      return {
+        season: season.year,
+        team: match.team,
+        stats: match.stats,
+        derived: match.derived
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => Number(b.season) - Number(a.season));
+
+  const [teamNames, spPlayer] = await Promise.all([
+    loadTeamNameMap(),
+    fetchJson<{
+      id: number;
+      title?: { rendered?: string };
+      number?: number | string;
+      link?: string;
+      teams?: number[];
+      current_teams?: number[];
+      seasons?: number[];
+    }>(`${SITE_ORIGIN}/wp-json/sportspress/v2/players/${sourceId}`, 12000)
+  ]);
+
+  if (!appearances.length && !spPlayer) return null;
+
+  const resolvedName =
+    decodeEntities(spPlayer?.title?.rendered ?? "").trim() ||
+    seasonResults.flatMap((row) => row.data?.players ?? []).find((player) => player.sourceId === sourceId)?.name ||
+    `Player ${sourceId}`;
+
+  const careerPlayer = careerFromSeasons(resolvedName, appearances, sourceId);
+  const currentTeam =
+    (spPlayer?.current_teams ?? [])
+      .map((id) => teamNames.get(id))
+      .find(Boolean) || appearances[0]?.team;
+  // Only show teams confirmed by season stats/rosters — SportsPress `teams` includes
+  // historical associations that are often stale or incomplete for our season lists.
+  const teams = [...new Set(appearances.map((row) => row.team).filter((name): name is string => Boolean(name)))];
+
+  const profile: PlayerProfile = {
+    id: careerPlayer.id,
+    sourceId,
+    name: resolvedName,
+    number: spPlayer?.number || undefined,
+    profileUrl: spPlayer?.link,
+    currentTeam,
+    teams,
+    seasons: appearances,
+    career: {
+      seasonsPlayed: appearances.length,
+      stats: careerPlayer.stats,
+      derived: careerPlayer.derived
+    },
+    meta: { fetchedAt: new Date().toISOString() }
+  };
+
+  profileMemory.set(sourceId, profile);
+  return profile;
 }

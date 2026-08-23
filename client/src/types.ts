@@ -10,6 +10,7 @@ export interface Player {
   name: string;
   profileUrl?: string;
   team?: string;
+  sourceId?: string;
   stats: Stats;
   derived: {
     totalTouchdowns: number;
@@ -23,6 +24,30 @@ export interface SeasonInfo {
   year: string;
   label: string;
   slug: string;
+}
+
+export interface SeasonAppearance {
+  season: string;
+  team?: string;
+  stats: Stats;
+  derived: Player["derived"];
+}
+
+export interface PlayerProfile {
+  id: string;
+  sourceId: string;
+  name: string;
+  number?: number | string;
+  profileUrl?: string;
+  currentTeam?: string;
+  teams: string[];
+  seasons: SeasonAppearance[];
+  career: {
+    seasonsPlayed: number;
+    stats: Stats;
+    derived: Player["derived"];
+  };
+  meta: { fetchedAt: string };
 }
 
 export interface PlayersResponse {

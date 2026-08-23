@@ -10,12 +10,16 @@ A UX-first replacement for the 2026 TUFF stats table, built with React, TypeScri
 - Quick-leaders panel
 - Player detail drawer with grouped offense / defense / conversions
 - Small Node API that normalizes TUFF's stat abbreviations
-- Five-minute in-memory cache to avoid hammering the source site
+- Change-detection cache (memory + disk) that only re-fetches when SportsPress list data changes
 - No API key required for the current public source
 
 ## Data strategy
 
 The API adapter attempts SportsPress REST first. If the list endpoint is unavailable or doesn't expose usable stat rows, it falls back to parsing the public 2026 stats HTML table. The React app only consumes our normalized API, so the upstream implementation can change without infecting the UI.
+
+Heavy season payloads are cached under `server/.cache/` and reused until a lightweight SportsPress `_fields` / `modified_gmt` check shows the source lists changed. Pass `?refresh=1` to force a full re-fetch. If the source is temporarily down, the last good snapshot is served.
+
+On startup the API warms every season into that cache in the background. Player career profiles then read those warm snapshots directly (no per-season revalidation chatter).
 
 Default source:
 
@@ -45,7 +49,6 @@ Copy `server/.env.example` to `server/.env` if you want to override defaults.
 PORT=4000
 TUFF_STATS_URL=https://www.playtuff.ca/list/2026-tuff-stats/
 TUFF_LIST_SLUG=2026-tuff-stats
-CACHE_TTL_MS=300000
 ```
 
 ## Host on Render
