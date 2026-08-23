@@ -12,12 +12,24 @@ function formatGameWhen(iso: string) {
   });
 }
 
-export function GameCard({ game }: { game: ScheduleGame }) {
+export function GameCard({
+  game,
+  selected,
+  onSelect
+}: {
+  game: ScheduleGame;
+  selected?: boolean;
+  onSelect?: (game: ScheduleGame) => void;
+}) {
   const [home, away] = game.teams;
   if (!home || !away) return null;
 
   return (
-    <article className={`game-card ${game.status}`}>
+    <button
+      type="button"
+      className={`game-card ${game.status}${selected ? " selected" : ""}`}
+      onClick={() => onSelect?.(game)}
+    >
       <div className="game-meta">
         <span>{formatGameWhen(game.date)}</span>
         {game.venue ? <span>{game.venue}</span> : null}
@@ -33,11 +45,7 @@ export function GameCard({ game }: { game: ScheduleGame }) {
           <span className="game-score">{game.status === "final" ? away.score ?? "—" : ""}</span>
         </div>
       </div>
-      {game.link ? (
-        <a className="game-link" href={game.link} target="_blank" rel="noreferrer">
-          Details
-        </a>
-      ) : null}
-    </article>
+      <span className="game-link">{game.status === "final" ? "Box score" : "Game details"}</span>
+    </button>
   );
 }

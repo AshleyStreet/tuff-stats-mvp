@@ -90,6 +90,24 @@ export interface ScheduleResponse {
   meta: { fetchedAt: string; total: number };
 }
 
+export interface BoxScorePlayer {
+  sourceId: string;
+  name: string;
+  number?: string;
+  stats: Stats;
+  derived: { totalTouchdowns: number };
+}
+
+export interface BoxScoreSide extends ScheduleSide {
+  players: BoxScorePlayer[];
+}
+
+export interface GameDetail {
+  game: ScheduleGame;
+  sides: BoxScoreSide[];
+  meta: { fetchedAt: string };
+}
+
 export interface PlayersResponse {
   players: Player[];
   meta: {

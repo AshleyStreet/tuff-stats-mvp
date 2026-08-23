@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Search, Trophy } from "lucide-react";
 import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers } from "./api";
 import { GameCard } from "./components/GameCard";
+import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
 import { TeamCard } from "./components/TeamCard";
 import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
-import type { Player, PlayersResponse, ScheduleResponse, SeasonInfo, StatKey } from "./types";
+import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInfo, StatKey } from "./types";
 
 type Tab = "players" | "teams" | "schedule";
 type ScheduleView = "all" | "results" | "upcoming";
@@ -33,6 +34,7 @@ export default function App() {
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
   const [sort, setSort] = useState<StatKey | "totalPoints">("totalPoints");
   const [selected, setSelected] = useState<Player | null>(null);
+  const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +120,10 @@ export default function App() {
     };
   }, [season, tab]);
 
+  useEffect(() => {
+    if (tab !== "schedule") setSelectedGame(null);
+  }, [tab]);
+
   const rosterPlayers = useMemo(
     () => withCanonicalTeams(data?.players ?? [], data?.meta.standings ?? []),
     [data?.players, data?.meta.standings]
@@ -171,6 +177,16 @@ export default function App() {
     [schedule?.games, team, search]
   );
 
+  function openGame(game: ScheduleGame) {
+    setSelected(null);
+    setSelectedGame(game);
+  }
+
+  function openPlayer(player: Player) {
+    setSelectedGame(null);
+    setSelected(player);
+  }
+
   function goPlayers() {
     setTab("players");
     setActiveTeam(null);
@@ -195,10 +211,11 @@ export default function App() {
     setActiveTeam(name);
     setSearch("");
     setSelected(null);
+    setSelectedGame(null);
   }
 
   return (
-    <div className={`app-shell${selected ? " detail-open" : ""}`}>
+    <div className={`app-shell${selected || selectedGame ? " detail-open" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <img
@@ -231,6 +248,7 @@ export default function App() {
               setTeam("");
               setActiveTeam(null);
               setSelected(null);
+              setSelectedGame(null);
             }}
             aria-label="Select season"
           >
@@ -272,7 +290,7 @@ export default function App() {
                 <h3><Trophy size={16} /> Quick leaders</h3>
                 <span className="leader-category">{sortLabel}{team ? ` · ${team}` : ""}</span>
                 {leaders.map((player, index) => (
-                  <button className="leader-row" key={player.id} onClick={() => setSelected(player)}>
+                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player)}>
                     <span className="leader-rank">{index + 1}</span>
                     <span className="leader-name">{player.name}</span>
                     <strong>{statValue(player)}</strong>
@@ -322,7 +340,7 @@ export default function App() {
                 <h3><Trophy size={16} /> Team leaders</h3>
                 <span className="leader-category">{activeTeam}</span>
                 {leaders.map((player, index) => (
-                  <button className="leader-row" key={player.id} onClick={() => setSelected(player)}>
+                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player)}>
                     <span className="leader-rank">{index + 1}</span>
                     <span className="leader-name">{player.name}</span>
                     <strong>{statValue(player)}</strong>
@@ -456,7 +474,7 @@ export default function App() {
           {!loading && (tab === "players" || activeTeam) && (
             <div className="player-grid">
               {players.map((player) => (
-                <PlayerCard key={player.id} player={player} selected={selected?.id === player.id} onSelect={setSelected} />
+                <PlayerCard key={player.id} player={player} selected={selected?.id === player.id} onSelect={openPlayer} />
               ))}
             </div>
           )}
@@ -471,7 +489,12 @@ export default function App() {
           {!scheduleLoading && tab === "schedule" && (
             <div className="schedule-list">
               {filteredGames.map((game) => (
-                <GameCard key={game.id} game={game} />
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  selected={selectedGame?.id === game.id}
+                  onSelect={openGame}
+                />
               ))}
             </div>
           )}
@@ -483,6 +506,16 @@ export default function App() {
           )}
         </main>
 
+        {selectedGame && !selected && (
+          <GameDetail
+            game={selectedGame}
+            season={season}
+            players={rosterPlayers}
+            onClose={() => setSelectedGame(null)}
+            onSelectPlayer={openPlayer}
+          />
+        )}
+
         {selected && (
           <PlayerDetail
             player={selected}
@@ -492,6 +525,7 @@ export default function App() {
               setSeason(year);
               setTeam("");
               setActiveTeam(null);
+              setSelectedGame(null);
             }}
           />
         )}

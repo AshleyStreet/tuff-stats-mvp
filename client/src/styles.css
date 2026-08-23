@@ -416,18 +416,34 @@ h1 {
 }
 
 .game-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   padding: 14px 16px;
   background:
     linear-gradient(145deg, rgba(227, 27, 35, 0.04), transparent 40%),
     linear-gradient(165deg, #17191a, #101112 70%);
+  transition: transform 0.25s var(--ease), border-color 0.25s ease, background 0.25s ease;
 }
 .game-card.final {
   background:
     linear-gradient(145deg, rgba(215, 181, 109, 0.06), transparent 42%),
     linear-gradient(165deg, #17191a, #101112 70%);
 }
+.game-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.game-card.selected {
+  border-color: var(--red);
+  background:
+    linear-gradient(145deg, rgba(227, 27, 35, 0.14), transparent 42%),
+    linear-gradient(165deg, #1a1213, #101112 70%);
+}
+.game-card.selected .game-link { color: var(--red-bright); }
 .game-meta {
   display: flex;
   flex-wrap: wrap;
@@ -466,6 +482,7 @@ h1 {
   text-transform: uppercase;
   text-decoration: none;
 }
+.game-card:hover .game-link,
 .game-link:hover { color: var(--red-bright); }
 
 .source-badge {
@@ -646,6 +663,8 @@ h1 {
   overflow: hidden;
 }
 .hero-kpis.compact { margin-top: 10px; margin-bottom: 8px; }
+.hero-kpis.game-scoreboard { grid-template-columns: 1fr 1fr; }
+.winner-score { color: var(--gold); }
 .hero-kpis div {
   padding: 14px 10px;
   text-align: center;
@@ -782,6 +801,53 @@ h1 {
   letter-spacing: 1px;
   text-transform: uppercase;
 }
+.box-table {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0f1011;
+}
+.box-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 36px 44px 40px 36px 40px;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #232526;
+  background: transparent;
+  color: #d7d7d7;
+  text-align: left;
+  font-size: 12px;
+}
+button.box-row { cursor: pointer; }
+.box-row:last-child { border-bottom: 0; }
+button.box-row:hover {
+  background: rgba(227, 27, 35, 0.12);
+  color: white;
+}
+.box-head {
+  color: #777b80;
+  font: 700 10px "Barlow Condensed";
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #292b2c;
+}
+.box-num { color: #8b8e92; }
+.box-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.box-total {
+  color: white;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.03);
+}
+.game-detail-hero h2 { font-size: 30px; }
+
 .source-link {
   display: flex;
   justify-content: center;

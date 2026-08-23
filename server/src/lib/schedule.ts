@@ -1,4 +1,5 @@
-import { toNumber } from "./stats.js";
+import { statsFromRow, toNumber } from "./stats.js";
+import type { Stats } from "../types.js";
 
 export type ScheduleSide = {
   id: number;
@@ -16,6 +17,66 @@ export type ScheduleGame = {
   venue?: string;
   teams: ScheduleSide[];
 };
+
+export type BoxScorePlayer = {
+  sourceId: string;
+  name: string;
+  number?: string;
+  stats: Stats;
+  derived: { totalTouchdowns: number };
+};
+
+export type BoxScoreSide = ScheduleSide & {
+  players: BoxScorePlayer[];
+};
+
+export type GameDetail = {
+  game: ScheduleGame;
+  sides: BoxScoreSide[];
+  meta: { fetchedAt: string };
+};
+
+function jerseySortValue(value?: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 9999;
+}
+
+/** SportsPress `performance` is keyed by team id, then player id (skip `"0"` header rows). */
+export function parseBoxScore(
+  performance: Record<string, Record<string, Record<string, unknown>>> | null | undefined,
+  sides: ScheduleSide[],
+  playerNames: Map<number, string> = new Map()
+): BoxScoreSide[] {
+  return sides.map((side) => {
+    const block = performance?.[String(side.id)] ?? {};
+    const players: BoxScorePlayer[] = [];
+
+    for (const [key, row] of Object.entries(block)) {
+      if (key === "0" || !row || typeof row !== "object" || Array.isArray(row)) continue;
+      const sourceId = Number(key);
+      if (!Number.isFinite(sourceId) || sourceId <= 0) continue;
+
+      const stats = statsFromRow(row);
+      const rawNumber = String(row.number ?? "").trim();
+      const rawName = typeof row.name === "string" ? row.name.trim() : "";
+      const name = playerNames.get(sourceId) || rawName || `Player ${sourceId}`;
+      players.push({
+        sourceId: String(sourceId),
+        name,
+        number: rawNumber || undefined,
+        stats,
+        derived: { totalTouchdowns: stats.paTD + stats.ruTD + stats.recTD + stats.retTD }
+      });
+    }
+
+    players.sort(
+      (a, b) =>
+        jerseySortValue(a.number) - jerseySortValue(b.number) || a.name.localeCompare(b.name)
+    );
+
+    return { ...side, players };
+  });
+}
 
 function stripHtml(value: unknown) {
   return String(value ?? "")

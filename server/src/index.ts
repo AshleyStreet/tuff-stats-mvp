@@ -9,6 +9,7 @@ import { filterAndSortPlayers } from "./lib/query.js";
 import {
   getPlayerProfile,
   getPlayers,
+  getGame,
   getSchedule,
   getSeasons,
   getServiceStatus,
@@ -98,6 +99,18 @@ app.get("/api/schedule", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return res.status(502).json({ error: "Unable to load TUFF schedule", detail: message });
+  }
+});
+
+app.get("/api/games/:id", async (req, res) => {
+  try {
+    const season = String(req.query.season ?? "").trim();
+    const data = await getGame(String(req.params.id), season || undefined);
+    if (!data) return res.status(404).json({ error: "Game not found" });
+    return res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(502).json({ error: "Unable to load box score", detail: message });
   }
 });
 
