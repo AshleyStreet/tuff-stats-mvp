@@ -1,4 +1,4 @@
-import type { PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
+import type { GameDetail, PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
 
 const profileCache = new Map<string, PlayerProfile>();
 const profileInflight = new Map<string, Promise<PlayerProfile>>();
@@ -75,6 +75,36 @@ export async function getSchedule(season = "") {
   });
 
   scheduleInflight.set(key, request);
+  return request;
+}
+
+const gameCache = new Map<string, GameDetail>();
+const gameInflight = new Map<string, Promise<GameDetail>>();
+
+export async function getGame(id: number, season = "") {
+  const key = `${season || "default"}:${id}`;
+  const cached = gameCache.get(key);
+  if (cached) return cached;
+
+  const pending = gameInflight.get(key);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    const response = await fetch(`/api/games/${id}?${params}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.detail ?? error?.error ?? "Could not load box score");
+    }
+    const data = (await response.json()) as GameDetail;
+    gameCache.set(key, data);
+    return data;
+  })().finally(() => {
+    gameInflight.delete(key);
+  });
+
+  gameInflight.set(key, request);
   return request;
 }
 

@@ -1,4 +1,4 @@
-import { hydrateScheduleGames, mapEventLineup, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
+import { hydrateScheduleGames, mapEventLineup, parseBoxScore, parseScheduleEvent, partitionSchedule } from "../src/lib/schedule.js";
 
 describe("parseScheduleEvent", () => {
   const teams = new Map([
@@ -121,6 +121,49 @@ describe("mapEventLineup", () => {
       { playerId: 7593, team: "Wildcats" },
       { playerId: 7586, team: "Wildcats" }
     ]);
+  });
+});
+
+describe("parseBoxScore", () => {
+  it("maps performance rows onto each side and sorts by jersey", () => {
+    const sides = parseBoxScore(
+      {
+        "6258": {
+          "0": { rec: "Rec" },
+          "4131": { number: "82", rec: "0", patd: "4", rectd: "0", int: "0", sack: "0" },
+          "5511": { number: "5", rec: "6", patd: "0", rectd: "1", int: "2", sack: "0" }
+        },
+        "118": {
+          "7585": { number: "6", rec: "5", patd: "0", rectd: "1", int: "1", sack: "0", rettd: "1" }
+        }
+      },
+      [
+        { id: 6258, name: "Cobras", score: 28, outcome: "win" },
+        { id: 118, name: "Wildcats", score: 19, outcome: "loss" }
+      ],
+      new Map([
+        [4131, "Shaun G."],
+        [5511, "Kevin R."],
+        [7585, "Carsson S."]
+      ])
+    );
+
+    expect(sides[0]?.players.map((player) => player.name)).toEqual(["Kevin R.", "Shaun G."]);
+    expect(sides[0]?.players[0]).toMatchObject({
+      sourceId: "5511",
+      number: "5",
+      stats: { rec: 6, recTD: 1, int: 2 },
+      derived: { totalTouchdowns: 1 }
+    });
+    expect(sides[1]?.players[0]).toMatchObject({
+      name: "Carsson S.",
+      derived: { totalTouchdowns: 2 }
+    });
+  });
+
+  it("returns empty lineups when performance is missing", () => {
+    const sides = parseBoxScore(undefined, [{ id: 1, name: "Cobras" }, { id: 2, name: "Wildcats" }]);
+    expect(sides.every((side) => side.players.length === 0)).toBe(true);
   });
 });
 

@@ -16,7 +16,7 @@ import {
 } from "./lib/stats.js";
 import { careerFromSeasons, collectCareerAppearances, extractSourceId } from "./lib/profile.js";
 import { listFingerprint, readCacheFile, writeCacheFile } from "./lib/cache.js";
-import { hydrateScheduleGames, mapEventLineup, parseScheduleEvent, type ScheduleGame } from "./lib/schedule.js";
+import { hydrateScheduleGames, mapEventLineup, parseBoxScore, parseScheduleEvent, type GameDetail, type ScheduleGame } from "./lib/schedule.js";
 import { parseStandingsTable, standingsSlugCandidates, type TeamStanding } from "./lib/standings.js";
 import type { Player, PlayersResponse, SeasonInfo } from "./types.js";
 
@@ -669,6 +669,7 @@ type ScheduleCacheEntry = {
 };
 
 const scheduleCache = new Map<string, ScheduleCacheEntry>();
+const gameBoxCache = new Map<number, GameDetail>();
 
 function scheduleCacheName(year: string) {
   return `schedule-${year}.json`;
@@ -819,6 +820,79 @@ export async function getSchedule(force = false, seasonYear?: string): Promise<S
   }
 }
 
+export async function getGame(eventId: string, seasonYear?: string): Promise<GameDetail | null> {
+  const id = Number(eventId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+
+  const cached = gameBoxCache.get(id);
+  if (cached) return cached;
+
+  const event = await fetchJson<{
+    id: number;
+    date?: string;
+    status?: string;
+    link?: string;
+    title?: { rendered?: string };
+    teams?: Array<number | string>;
+    venues?: number[];
+    main_results?: unknown;
+    results?: Record<string, unknown>;
+    players?: number[];
+    performance?: Record<string, Record<string, Record<string, unknown>>>;
+  }>(
+    `${SITE_ORIGIN}/wp-json/sportspress/v2/events/${id}?_fields=id,date,status,title,link,teams,venues,main_results,results,players,performance`,
+    20000
+  );
+  if (!event?.id) return null;
+
+  const [teamNames, venueNames] = await Promise.all([loadTeamNameMap(), loadVenueNameMap()]);
+  const game = parseScheduleEvent(event, teamNames, venueNames);
+  if (!game) return null;
+
+  const year = (seasonYear ?? DEFAULT_SEASON).trim() || DEFAULT_SEASON;
+  const names = new Map<number, string>();
+  let seasonPlayers = readSeasonCache(year)?.data?.players ?? [];
+  if (!seasonPlayers.length) {
+    try {
+      seasonPlayers = (await getPlayers(false, year, true)).players;
+    } catch {
+      seasonPlayers = [];
+    }
+  }
+  for (const player of seasonPlayers) {
+    const sourceId = Number(player.sourceId);
+    if (Number.isFinite(sourceId) && player.name) names.set(sourceId, player.name);
+  }
+
+  const missing = [
+    ...new Set(
+      Object.values(event.performance ?? {}).flatMap((block) =>
+        Object.keys(block ?? {})
+          .map((key) => Number(key))
+          .filter((playerId) => playerId > 0 && !names.has(playerId))
+      )
+    )
+  ];
+  for (const group of chunk(missing, 50)) {
+    const rows = await fetchJson<Array<{ id: number; title?: { rendered?: string } }>>(
+      `${SITE_ORIGIN}/wp-json/sportspress/v2/players?include=${group.join(",")}&per_page=${group.length}&_fields=id,title`,
+      15000
+    );
+    for (const row of rows ?? []) {
+      const name = decodeEntities(row.title?.rendered ?? "").trim();
+      if (name) names.set(row.id, name);
+    }
+  }
+
+  const detail: GameDetail = {
+    game,
+    sides: parseBoxScore(event.performance, game.teams, names),
+    meta: { fetchedAt: new Date().toISOString() }
+  };
+  gameBoxCache.set(id, detail);
+  return detail;
+}
+
 export async function getPlayers(force = false, seasonYear?: string, preferCache = false): Promise<PlayersResponse> {
   const season = await resolveSeason(seasonYear, preferCache && !force);
   const cached = readSeasonCache(season.year);
@@ -936,6 +1010,7 @@ export async function refreshSeasonData(seasonYear?: string) {
   teamNamesMemory = null;
   standingsCache.clear();
   scheduleCache.clear();
+  gameBoxCache.clear();
 
   if (seasonYear) {
     await getStandings(true, seasonYear);
