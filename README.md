@@ -61,20 +61,6 @@ curl -X POST https://<your-app>/api/admin/refresh \
   -d "{\"season\":\"2026\"}"
 ```
 
-## Host on Render
-
-Production serves the built React app and API from one Express process.
-
-1. Push this repo to GitHub
-2. In [Render](https://render.com), create a new **Blueprint** from the repo (uses `render.yaml`), or a **Web Service** with:
-   - **Build:** `npm install --include=dev && npm run install:all && npm run build`
-   - **Start:** `npm start`
-   - **Health check:** `/api/health`
-3. Set `ADMIN_TOKEN` in the Render dashboard (Blueprint marks it as sync:false)
-4. Deploy — your app will be at `https://<service>.onrender.com`
-
-`render.yaml` also defines a cron job (`tuff-stats-keepalive`) that hits `/api/health` every 12 minutes so free-tier instances stay awake.
-
 Useful endpoints:
 
 - `GET /api/health` — lightweight liveness + warm summary
@@ -90,10 +76,6 @@ npm start
 
 Then open http://localhost:4000
 
-Season selector covers available TUFF/TGFL stats lists (currently 2019–2026). Teams for each season come from that year’s roster lists.
-
 ## Production note
-
-This is intentionally an MVP. Before making it a public production service, confirm TUFF is happy with the data being republished.
 
 The UI shows when season data was last fetched. Visitors always use the shared cache; they cannot force a source re-scrape.
