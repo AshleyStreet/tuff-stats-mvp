@@ -179,17 +179,17 @@ select option {
 
 .mobile-tabs {
   display: none;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(10, 10, 10, 0.92);
 }
 .mobile-tabs button {
   border: 0;
   background: transparent;
-  padding: 12px;
-  font: 700 14px "Barlow Condensed";
+  padding: 12px 6px;
+  font: 700 13px "Barlow Condensed";
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.6px;
   color: #9b9da1;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -338,6 +338,36 @@ main {
   padding-bottom: 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
+}
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.print-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(215, 181, 109, 0.45);
+  background: linear-gradient(180deg, #2a2418, #1a1610);
+  color: var(--gold);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font: 700 11px "Barlow Condensed";
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.print-action:hover {
+  border-color: var(--gold);
+  color: white;
+}
+.print-action.detail-print {
+  margin-top: 10px;
+  padding: 6px 10px;
 }
 .page-heading::after {
   content: "";
@@ -1097,15 +1127,206 @@ button.log-row:hover {
   to { opacity: 1; transform: translateX(0); }
 }
 
+.trading-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 22px 18px;
+  justify-items: center;
+}
+
+.trading-card {
+  container-type: inline-size;
+  container-name: tcard;
+  width: 100%;
+  max-width: 248px;
+  aspect-ratio: 2.5 / 3.5;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  display: block;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.trading-card.interactive { cursor: pointer; }
+.trading-card.interactive:hover .trading-card-face {
+  transform: translateY(-3px);
+  box-shadow:
+    0 16px 28px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px #8a0f14;
+}
+.trading-card.selected .trading-card-face {
+  box-shadow:
+    0 0 0 2px var(--red-bright),
+    0 12px 24px rgba(227, 27, 35, 0.28),
+    inset 0 0 0 1px #8a0f14;
+}
+
+.trading-card-face {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f3eee4;
+  color: #141414;
+  border: 3px solid #c9a227;
+  outline: 2px solid #1a0a0a;
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px #8a0f14;
+  border-radius: 3px;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s ease;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tc-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.28em 0.55em;
+  background: linear-gradient(180deg, #e31b23, #8a0f14);
+  color: #fff;
+  font: italic 800 11px/1.2 "Barlow Condensed", sans-serif;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.tc-art {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(227, 27, 35, 0.35), transparent 62%),
+    linear-gradient(180deg, #2a1214 0%, #0d0d0d 100%);
+  overflow: hidden;
+}
+.tc-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.16) 50%, transparent 62%);
+  pointer-events: none;
+}
+.tc-logo {
+  width: 58%;
+  height: auto;
+  max-height: 72%;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+div.tc-logo {
+  width: 58%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #f5f5f5;
+  font: 800 28px "Barlow Condensed", sans-serif;
+  background: linear-gradient(145deg, #3a1518, #1a1011);
+  border: 2px solid rgba(215, 181, 109, 0.45);
+}
+.tc-jersey {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 1;
+  color: #d7b56d;
+  font: italic 800 22px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+.tc-identity {
+  padding: 8px 10px 4px;
+  background: linear-gradient(180deg, #f7f3ea, #efe8d8);
+}
+.tc-first {
+  display: block;
+  color: #6a4a16;
+  font: 700 10px/1.1 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.tc-last {
+  display: block;
+  margin: 1px 0 3px;
+  font: italic 800 26px/0.92 "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #111;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-team {
+  display: block;
+  color: #8a0f14;
+  font: 700 11px/1.2 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+.tc-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 2px solid #c9a227;
+  background: #fffdf8;
+}
+.tc-stats div {
+  padding: 6px 2px 7px;
+  text-align: center;
+  border-right: 1px solid #e6dcc6;
+}
+.tc-stats div:last-child { border-right: 0; }
+.tc-stats span {
+  display: block;
+  color: #8a0f14;
+  font: 700 8px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.4px;
+}
+.tc-stats strong {
+  display: block;
+  margin-top: 2px;
+  font: 800 16px/1 "Barlow Condensed", sans-serif;
+  color: #111;
+}
+.tc-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 5px;
+  background: #1a0a0a;
+  color: #d7b56d;
+  font: 700 8px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.tc-footer span:last-child { color: #f3eee4; }
+
+@container tcard (max-width: 200px) {
+  .tc-last { font-size: 20px; }
+  .tc-stats strong { font-size: 13px; }
+  .tc-jersey { font-size: 16px; }
+}
+
+.print-sheet { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .football,
   .brand,
   .sidebar,
   main,
   .player-card,
+  .trading-card-face,
   .detail-panel {
     animation: none !important;
   }
+  .trading-card.interactive:hover .trading-card-face { transform: none; }
   .football { transform: rotateZ(-32deg); }
   .app-shell.detail-open main,
   .app-shell.detail-open .sidebar { opacity: 1; }
@@ -1147,6 +1368,61 @@ button.log-row:hover {
   .field-label { margin-top: 8px; }
   .player-grid { grid-template-columns: 1fr; }
   .page-heading { align-items: flex-start; flex-direction: column; }
+  .heading-actions { justify-content: flex-start; }
   h1 { font-size: 40px; }
   .season-pill { padding: 5px 8px; }
+}
+
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.25in 0.5in;
+  }
+
+  html, body {
+    background: #fff !important;
+    color: #111;
+  }
+  body::before { display: none !important; }
+
+  body:has(.print-sheet.is-ready) .app-shell {
+    display: none !important;
+  }
+  .print-sheet.is-ready {
+    display: block !important;
+  }
+
+  .print-page {
+    display: grid;
+    grid-template-columns: repeat(3, 2.5in);
+    grid-auto-rows: 3.5in;
+    width: 7.5in;
+    page-break-after: always;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .print-page.single {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 10.5in;
+  }
+
+  .print-sheet .trading-card {
+    width: 2.5in;
+    height: 3.5in;
+    max-width: none;
+    aspect-ratio: auto;
+  }
+  .print-sheet .trading-card-face {
+    transform: none !important;
+    box-shadow: inset 0 0 0 1px #8a0f14;
+    border-radius: 0;
+  }
+  .print-sheet .tc-art::after { display: none; }
 }

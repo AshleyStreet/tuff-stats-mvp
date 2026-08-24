@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ExternalLink, Shield, Trophy, X, Zap } from "lucide-react";
+import { CalendarDays, ExternalLink, Printer, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
+import { toTradingCard, type TradingCardData } from "../lib/cards";
 import { teamLogoUrl } from "../lib/teams";
 import type { Player, PlayerGameLog, PlayerProfile, ScheduleGame, SeasonAppearance } from "../types";
 import { CareerChart } from "./CareerChart";
@@ -13,6 +14,7 @@ interface Props {
   onClose: () => void;
   onSelectSeason?: (season: string) => void;
   onSelectGame?: (game: ScheduleGame) => void;
+  onPrintCard?: (card: TradingCardData) => void;
 }
 
 const Row = ({ label, value }: { label: string; value: number }) => (
@@ -37,7 +39,7 @@ function formatResult(outcome?: string, score?: number, oppScore?: number) {
   return mark || "—";
 }
 
-export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame }: Props) {
+export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame, onPrintCard }: Props) {
   const cached = peekPlayerProfile(player.id);
   const [profile, setProfile] = useState<PlayerProfile | null>(cached);
   const [loading, setLoading] = useState(!cached);
@@ -159,6 +161,25 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
               ? `${career.seasonsPlayed} season${career.seasonsPlayed === 1 ? "" : "s"} · ${career.derived.totalPoints} career pts`
               : `${player.stats.gms} games · ${player.derived.totalPoints} pts`}
           </p>
+          {onPrintCard && seasonView && (
+            <button
+              type="button"
+              className="print-action detail-print"
+              onClick={() =>
+                onPrintCard(
+                  toTradingCard(player, seasonView.season, teamLogos, {
+                    name: displayName,
+                    team: seasonView.team ?? teamLabel,
+                    number: profile?.number,
+                    stats: seasonView.stats,
+                    derived: seasonView.derived
+                  })
+                )
+              }
+            >
+              <Printer size={14} /> Print card
+            </button>
+          )}
         </div>
       </div>
 
