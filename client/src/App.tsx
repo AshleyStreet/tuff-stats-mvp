@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Search, Trophy } from "lucide-react";
+import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
 import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers } from "./api";
 import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
+import { PrintSheet } from "./components/PrintSheet";
 import { TeamCard } from "./components/TeamCard";
 import { TeamLogo } from "./components/TeamLogo";
+import { TradingCard } from "./components/TradingCard";
+import { toTradingCard, type TradingCardData } from "./lib/cards";
 import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
 import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInfo, StatKey } from "./types";
 
-type Tab = "players" | "teams" | "schedule";
+type Tab = "players" | "teams" | "schedule" | "cards";
 type ScheduleView = "all" | "results" | "upcoming";
 
 const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
@@ -43,6 +46,7 @@ export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [scheduleView, setScheduleView] = useState<ScheduleView>("all");
   const [now, setNow] = useState(() => Date.now());
+  const [printCards, setPrintCards] = useState<TradingCardData[] | null>(null);
 
   useEffect(() => {
     getSeasons()
@@ -142,15 +146,16 @@ export default function App() {
   }, [teamSummaries, search, tab, activeTeam]);
 
   const rosterTeam = tab === "teams" ? activeTeam ?? "" : team;
+  const playerSearch = tab === "players" || tab === "cards" || Boolean(activeTeam);
 
   const players = useMemo(
     () =>
       filterAndSortPlayers(rosterPlayers, {
-        search: tab === "players" || activeTeam ? search : "",
+        search: playerSearch ? search : "",
         team: rosterTeam,
         sort
       }),
-    [rosterPlayers, search, rosterTeam, sort, tab, activeTeam]
+    [rosterPlayers, search, rosterTeam, sort, playerSearch]
   );
 
   const leaders = useMemo(() => players.slice(0, 5), [players]);
@@ -211,6 +216,50 @@ export default function App() {
     setSelected(null);
   }
 
+  function goCards() {
+    setTab("cards");
+    setActiveTeam(null);
+    setSelectedGame(null);
+  }
+
+  function sheetForPlayers(list: Player[]) {
+    return list.map((item) => toTradingCard(item, season, data?.meta.teamLogos));
+  }
+
+  function requestPrint(cards: TradingCardData[]) {
+    if (!cards.length) return;
+    setPrintCards(cards);
+  }
+
+  useEffect(() => {
+    if (!printCards?.length) return;
+    let cancelled = false;
+
+    async function printWhenReady() {
+      const images = [...document.querySelectorAll<HTMLImageElement>(".print-sheet img")];
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+            window.setTimeout(() => resolve(), 2000);
+          });
+        })
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 40));
+      if (!cancelled) window.print();
+    }
+
+    void printWhenReady();
+    const done = () => setPrintCards(null);
+    window.addEventListener("afterprint", done);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("afterprint", done);
+    };
+  }, [printCards]);
+
   function openTeam(name: string) {
     setTab("teams");
     setActiveTeam(name);
@@ -220,6 +269,7 @@ export default function App() {
   }
 
   return (
+    <>
     <div className={`app-shell${selected || selectedGame ? " detail-open" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -242,6 +292,9 @@ export default function App() {
           </button>
           <button type="button" className={tab === "schedule" ? "active" : ""} onClick={goSchedule}>
             Schedule
+          </button>
+          <button type="button" className={tab === "cards" ? "active" : ""} onClick={goCards}>
+            Cards
           </button>
         </nav>
         <label className="season-pill">
@@ -268,13 +321,14 @@ export default function App() {
         <button type="button" className={tab === "players" ? "active" : ""} onClick={goPlayers}>Players</button>
         <button type="button" className={tab === "teams" ? "active" : ""} onClick={goTeams}>Teams</button>
         <button type="button" className={tab === "schedule" ? "active" : ""} onClick={goSchedule}>Schedule</button>
+        <button type="button" className={tab === "cards" ? "active" : ""} onClick={goCards}>Cards</button>
       </div>
 
       <div className="page-grid">
         <aside className="sidebar">
-          {tab === "players" && (
+          {(tab === "players" || tab === "cards") && (
             <>
-              <div className="eyebrow">FIND A PLAYER</div>
+              <div className="eyebrow">{tab === "cards" ? "FIND A CARD" : "FIND A PLAYER"}</div>
               <label className="search-box">
                 <Search size={18} />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players…" />
@@ -401,6 +455,15 @@ export default function App() {
                   </p>
                 </>
               )}
+              {tab === "cards" && (
+                <>
+                  <h1>Trading cards</h1>
+                  <p>
+                    {players.length} cards · 2.5&quot; × 3.5&quot; · 9 per letter page · turn on background graphics · cut along the gold border
+                    {team ? ` · ${team}` : search ? ` · “${search}”` : ""}
+                  </p>
+                </>
+              )}
               {tab === "teams" && !activeTeam && (
                 <>
                   <h1>Teams</h1>
@@ -441,13 +504,25 @@ export default function App() {
                 </>
               )}
             </div>
-            {(data || schedule) && (
-              <span className="source-badge">
-                {tab === "schedule"
-                  ? `${formatUpdatedAt(schedule?.meta.fetchedAt, now) ? `Updated ${formatUpdatedAt(schedule?.meta.fetchedAt, now)}` : "Live"} · SportsPress`
-                  : `${updatedLabel ? `Updated ${updatedLabel}` : "Live"} · ${sourceLabel}`}
-              </span>
-            )}
+            <div className="heading-actions">
+              {(tab === "players" || tab === "cards" || Boolean(activeTeam)) && players.length > 0 && (
+                <button
+                  type="button"
+                  className="print-action"
+                  onClick={() => requestPrint(sheetForPlayers(players))}
+                >
+                  <Printer size={15} />
+                  Print {players.length} card{players.length === 1 ? "" : "s"}
+                </button>
+              )}
+              {(data || schedule) && (
+                <span className="source-badge">
+                  {tab === "schedule"
+                    ? `${formatUpdatedAt(schedule?.meta.fetchedAt, now) ? `Updated ${formatUpdatedAt(schedule?.meta.fetchedAt, now)}` : "Live"} · SportsPress`
+                    : `${updatedLabel ? `Updated ${updatedLabel}` : "Live"} · ${sourceLabel}`}
+                </span>
+              )}
+            </div>
           </div>
 
           {error && tab !== "schedule" && <div className="error-card"><strong>Couldn’t load TUFF.</strong><span>{error}</span></div>}
@@ -496,7 +571,20 @@ export default function App() {
             </div>
           )}
 
-          {!loading && (tab === "players" || activeTeam) && players.length === 0 && (
+          {!loading && tab === "cards" && (
+            <div className="trading-card-grid">
+              {players.map((player) => (
+                <TradingCard
+                  key={player.id}
+                  card={toTradingCard(player, season, data?.meta.teamLogos)}
+                  selected={selected?.id === player.id}
+                  onSelect={() => openPlayer(player)}
+                />
+              ))}
+            </div>
+          )}
+
+          {!loading && (tab === "players" || tab === "cards" || activeTeam) && players.length === 0 && (
             <div className="empty">
               No players match{search ? ` “${search}”` : ""}
               {rosterTeam ? `${search ? " on" : ""} ${rosterTeam}` : ""} in {season}.
@@ -546,9 +634,12 @@ export default function App() {
               setSelectedGame(null);
             }}
             onSelectGame={openGameFromProfile}
+            onPrintCard={(card) => requestPrint([card])}
           />
         )}
       </div>
     </div>
+    <PrintSheet cards={printCards ?? []} />
+    </>
   );
 }
