@@ -1255,7 +1255,7 @@ div.tc-logo {
 }
 .tc-last {
   display: block;
-  margin: 1px 0 3px;
+  margin: 1px 0 2px;
   font: italic 800 26px/0.92 "Barlow Condensed", sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -1264,6 +1264,18 @@ div.tc-logo {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tc-note {
+  display: block;
+  min-height: 1.15em;
+  margin: 0 0 3px;
+  color: #6a4a16;
+  font: italic 700 11px/1.25 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.3px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+.tc-note.has-text { color: #3d2a12; }
 .tc-team {
   display: block;
   color: #8a0f14;
@@ -1294,6 +1306,10 @@ div.tc-logo {
   margin-top: 2px;
   font: 800 16px/1 "Barlow Condensed", sans-serif;
   color: #111;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 1px;
 }
 .tc-footer {
   display: flex;
@@ -1315,6 +1331,99 @@ div.tc-logo {
 }
 
 .print-sheet { display: none; }
+
+.captain-hint {
+  margin: 8px 0 14px;
+  color: #8d8f93;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.captain-slot {
+  margin-top: 14px;
+}
+.captain-slot label {
+  display: block;
+  color: #aaa;
+  font: 700 11px "Barlow Condensed";
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.captain-slot select { margin-top: 6px; }
+.captain-custom-row,
+.captain-edit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.captain-edit-row {
+  grid-template-columns: 48px 1fr 1fr;
+  align-items: center;
+  margin-top: 10px;
+}
+.captain-edit-row > span {
+  color: #8d8f93;
+  font: 700 11px "Barlow Condensed";
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.captain-custom-row input,
+.captain-edit-row input {
+  width: 100%;
+  color: #eee;
+  background: #141516;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 9px 10px;
+  outline: none;
+}
+.captain-custom-row input:focus,
+.captain-edit-row input:focus,
+.captain-note-input:focus {
+  border-color: rgba(227, 27, 35, 0.45);
+}
+.captain-note-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 52px;
+  color: #eee;
+  background: #141516;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 9px 10px;
+  outline: none;
+  font: italic 15px/1.35 "Barlow Condensed", sans-serif;
+}
+.captain-slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 16px;
+}
+.text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d7b56d;
+  font: 700 12px "Barlow Condensed";
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.text-action:hover { color: white; }
+.captain-editor h2 {
+  margin: 8px 0 0;
+  font: italic 800 32px/1 "Barlow Condensed";
+  text-transform: uppercase;
+}
+.captain-editor .trading-card {
+  margin: 8px 0 6px;
+  max-width: 220px;
+}
+.captain-editor .field-label { margin-top: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
   .football,
