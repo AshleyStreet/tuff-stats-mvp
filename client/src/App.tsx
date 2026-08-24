@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
-import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers } from "./api";
+import { formatUpdatedAt, getPlayers, getSchedule, peekSeasonPlayers } from "./api";
 import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
@@ -9,14 +9,17 @@ import { PrintSheet } from "./components/PrintSheet";
 import { TeamCard } from "./components/TeamCard";
 import { TeamLogo } from "./components/TeamLogo";
 import { TradingCard } from "./components/TradingCard";
-import { toTradingCard, type TradingCardData } from "./lib/cards";
+import { toTradingCard } from "./lib/cards";
 import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
-import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInfo, StatKey } from "./types";
+import { usePrintCards } from "./lib/usePrintCards";
+import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, StatKey } from "./types";
 
 type Tab = "players" | "teams" | "schedule" | "cards";
 type ScheduleView = "all" | "results" | "upcoming";
+
+const PUBLIC_SEASON = "2026";
 
 const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
   { key: "totalPoints", label: "Total Points" },
@@ -30,8 +33,7 @@ const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
 
 export default function App() {
   const [data, setData] = useState<PlayersResponse | null>(null);
-  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
-  const [season, setSeason] = useState("2026");
+  const season = PUBLIC_SEASON;
   const [tab, setTab] = useState<Tab>("players");
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
@@ -46,20 +48,7 @@ export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [scheduleView, setScheduleView] = useState<ScheduleView>("all");
   const [now, setNow] = useState(() => Date.now());
-  const [printCards, setPrintCards] = useState<TradingCardData[] | null>(null);
-
-  useEffect(() => {
-    getSeasons()
-      .then((result) => {
-        setSeasons(result.seasons);
-        setSeason((current) =>
-          result.seasons.some((item) => item.year === current) ? current : result.defaultSeason
-        );
-      })
-      .catch(() => {
-        setSeasons([{ year: "2026", label: "2026 Season", slug: "2026-tuff-stats" }]);
-      });
-  }, []);
+  const { printCards, requestPrint } = usePrintCards();
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -226,40 +215,6 @@ export default function App() {
     return list.map((item) => toTradingCard(item, season, data?.meta.teamLogos));
   }
 
-  function requestPrint(cards: TradingCardData[]) {
-    if (!cards.length) return;
-    setPrintCards(cards);
-  }
-
-  useEffect(() => {
-    if (!printCards?.length) return;
-    let cancelled = false;
-
-    async function printWhenReady() {
-      const images = [...document.querySelectorAll<HTMLImageElement>(".print-sheet img")];
-      await Promise.all(
-        images.map((img) => {
-          if (img.complete) return Promise.resolve();
-          return new Promise<void>((resolve) => {
-            img.addEventListener("load", () => resolve(), { once: true });
-            img.addEventListener("error", () => resolve(), { once: true });
-            window.setTimeout(() => resolve(), 2000);
-          });
-        })
-      );
-      await new Promise((resolve) => window.setTimeout(resolve, 40));
-      if (!cancelled) window.print();
-    }
-
-    void printWhenReady();
-    const done = () => setPrintCards(null);
-    window.addEventListener("afterprint", done);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("afterprint", done);
-    };
-  }, [printCards]);
-
   function openTeam(name: string) {
     setTab("teams");
     setActiveTeam(name);
@@ -297,24 +252,6 @@ export default function App() {
             Cards
           </button>
         </nav>
-        <label className="season-pill">
-          <span className="season-pill-label">Season</span>
-          <select
-            value={season}
-            onChange={(event) => {
-              setSeason(event.target.value);
-              setTeam("");
-              setActiveTeam(null);
-              setSelected(null);
-              setSelectedGame(null);
-            }}
-            aria-label="Select season"
-          >
-            {(seasons.length ? seasons : [{ year: season, label: `${season} Season`, slug: "" }]).map((item) => (
-              <option key={item.year} value={item.year}>{item.year}</option>
-            ))}
-          </select>
-        </label>
       </header>
 
       <div className="mobile-tabs" role="tablist" aria-label="Views">
@@ -627,12 +564,6 @@ export default function App() {
             activeSeason={season}
             teamLogos={data?.meta.teamLogos}
             onClose={() => setSelected(null)}
-            onSelectSeason={(year) => {
-              setSeason(year);
-              setTeam("");
-              setActiveTeam(null);
-              setSelectedGame(null);
-            }}
             onSelectGame={openGameFromProfile}
             onPrintCard={(card) => requestPrint([card])}
           />

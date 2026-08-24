@@ -1,4 +1,4 @@
-import { initials, splitPlayerName, type TradingCardData } from "../lib/cards";
+import { initials, splitPlayerName, type CardStatLine, type TradingCardData } from "../lib/cards";
 import { TeamLogo } from "./TeamLogo";
 
 interface Props {
@@ -7,19 +7,20 @@ interface Props {
   onSelect?: () => void;
 }
 
-const statLine = (card: TradingCardData) =>
+const defaultLine = (card: TradingCardData): CardStatLine[] =>
   [
-    ["PTS", card.derived.totalPoints],
-    ["TD", card.derived.totalTouchdowns],
-    ["REC", card.stats.rec],
-    ["INT", card.stats.int],
-    ["SACK", card.stats.sack]
-  ] as const;
+    { label: "PTS", value: String(card.derived.totalPoints) },
+    { label: "TD", value: String(card.derived.totalTouchdowns) },
+    { label: "REC", value: String(card.stats.rec) },
+    { label: "INT", value: String(card.stats.int) },
+    { label: "SACK", value: String(card.stats.sack) }
+  ];
 
 export function TradingCard({ card, selected, onSelect }: Props) {
   const { first, last } = splitPlayerName(card.name);
   const jersey = card.number != null && String(card.number).trim() ? String(card.number).trim() : "";
   const className = `trading-card${selected ? " selected" : ""}${onSelect ? " interactive" : ""}`;
+  const stats = card.lineItems?.length ? card.lineItems : defaultLine(card);
   const face = (
     <div className="trading-card-face">
       <div className="tc-banner">
@@ -40,14 +41,19 @@ export function TradingCard({ card, selected, onSelect }: Props) {
       <div className="tc-identity">
         {first ? <span className="tc-first">{first}</span> : null}
         <strong className="tc-last">{last}</strong>
+        {card.note != null ? (
+          <span className={`tc-note${card.note.trim() ? " has-text" : ""}`}>
+            {card.note.trim() || "\u00a0"}
+          </span>
+        ) : null}
         <span className="tc-team">{card.team || "Free agent"}</span>
       </div>
 
       <div className="tc-stats">
-        {statLine(card).map(([label, value]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
+        {stats.map((item, index) => (
+          <div key={`${item.label}-${index}`}>
+            <span>{item.label || "\u00a0"}</span>
+            <strong>{item.value || "\u00a0"}</strong>
           </div>
         ))}
       </div>
