@@ -15,7 +15,12 @@ export const headerMap: Record<string, StatKey> = {
   comp: "comp",
   int: "int",
   sack: "sack",
-  att: "att",
+  att: "deflag",
+  attempt: "deflag",
+  attempts: "deflag",
+  deflag: "deflag",
+  deflags: "deflag",
+  dfl: "deflag",
   pa1pt: "pa1PT",
   paonept: "pa1PT",
   ru1pt: "ru1PT",
@@ -46,7 +51,7 @@ export const emptyStats = (): Stats => ({
   comp: 0,
   int: 0,
   sack: 0,
-  att: 0,
+  deflag: 0,
   pa1PT: 0,
   ru1PT: 0,
   re1PT: 0,
@@ -102,6 +107,17 @@ export function statsFromRow(row: Record<string, unknown>): Stats {
     const mapped = headerMap[key.toLowerCase()];
     if (mapped) stats[mapped] = toNumber(value);
   }
+  return stats;
+}
+
+/** Copy SportsPress `att` onto `deflag` for snapshots saved before the rename. */
+export function hydrateStats(raw: Partial<Stats> & { att?: number } | null | undefined): Stats {
+  const stats = emptyStats();
+  if (!raw) return stats;
+  for (const key of Object.keys(stats) as StatKey[]) {
+    if (raw[key] != null) stats[key] = toNumber(raw[key]);
+  }
+  if (!stats.deflag && raw.att != null) stats.deflag = toNumber(raw.att);
   return stats;
 }
 

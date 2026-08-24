@@ -1,6 +1,6 @@
 export type StatKey =
   | "gms" | "tpqb" | "tpnqb" | "paTD" | "ruTD" | "recTD" | "retTD"
-  | "comp" | "int" | "sack" | "att" | "pa1PT" | "ru1PT" | "re1PT"
+  | "comp" | "int" | "sack" | "deflag" | "pa1PT" | "ru1PT" | "re1PT"
   | "pa2PT" | "rec" | "ru2PT" | "re2PT" | "ret2PT" | "safety";
 
 export type Stats = Record<StatKey, number>;

@@ -27,6 +27,7 @@ const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
   { key: "rec", label: "Receptions" },
   { key: "int", label: "Interceptions" },
   { key: "sack", label: "Sacks" },
+  { key: "deflag", label: "Deflags" },
   { key: "paTD", label: "Passing TDs" },
   { key: "gms", label: "Games Played" }
 ];

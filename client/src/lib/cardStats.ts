@@ -28,7 +28,7 @@ export const CARD_STAT_OPTIONS: { key: LiveSlotKey; label: string; short: string
   { key: "int", label: "Interceptions", short: "INT" },
   { key: "sack", label: "Sacks", short: "SACK" },
   { key: "comp", label: "Completions", short: "CMP" },
-  { key: "att", label: "Pass attempts", short: "ATT" },
+  { key: "deflag", label: "Deflags", short: "DFL" },
   { key: "paTD", label: "Passing TDs", short: "PTD" },
   { key: "ruTD", label: "Rushing TDs", short: "RUSH" },
   { key: "retTD", label: "Return TDs", short: "RET" },

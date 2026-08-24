@@ -927,7 +927,7 @@ div.team-logo-md { font-size: 10px; }
 }
 .box-row {
   display: grid;
-  grid-template-columns: 32px 1fr 36px 44px 40px 36px 40px;
+  grid-template-columns: 32px 1fr 36px 44px 40px 36px 40px 36px;
   gap: 6px;
   align-items: center;
   width: 100%;
@@ -974,7 +974,7 @@ button.box-row:hover {
 }
 .log-row {
   display: grid;
-  grid-template-columns: 48px 1fr 62px 28px 38px 34px 28px 32px;
+  grid-template-columns: 48px 1fr 62px 28px 38px 34px 28px 32px 32px;
   gap: 4px;
   align-items: center;
   width: 100%;

@@ -17,7 +17,8 @@ const columns = [
   { key: "recTD", label: "RecTD" },
   { key: "paTD", label: "PaTD" },
   { key: "int", label: "INT" },
-  { key: "sack", label: "Sack" }
+  { key: "sack", label: "Sack" },
+  { key: "deflag", label: "DFL" }
 ] as const;
 
 function formatGameWhen(iso: string) {
@@ -33,13 +34,16 @@ function formatGameWhen(iso: string) {
 }
 
 function sumSide(side: BoxScoreSide) {
-  return {
-    rec: side.players.reduce((sum, player) => sum + player.stats.rec, 0),
-    recTD: side.players.reduce((sum, player) => sum + player.stats.recTD, 0),
-    paTD: side.players.reduce((sum, player) => sum + player.stats.paTD, 0),
-    int: side.players.reduce((sum, player) => sum + player.stats.int, 0),
-    sack: side.players.reduce((sum, player) => sum + player.stats.sack, 0)
-  };
+  const totals = Object.fromEntries(columns.map((column) => [column.key, 0])) as Record<
+    (typeof columns)[number]["key"],
+    number
+  >;
+  for (const player of side.players) {
+    for (const column of columns) {
+      totals[column.key] += player.stats[column.key];
+    }
+  }
+  return totals;
 }
 
 function BoxRow({
@@ -171,11 +175,9 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
               <div className="box-row box-total">
                 <span className="box-num" />
                 <span className="box-name">Team</span>
-                <span>{totals.rec}</span>
-                <span>{totals.recTD}</span>
-                <span>{totals.paTD}</span>
-                <span>{totals.int}</span>
-                <span>{totals.sack}</span>
+                {columns.map((column) => (
+                  <span key={column.key}>{totals[column.key]}</span>
+                ))}
               </div>
             </div>
           </section>
