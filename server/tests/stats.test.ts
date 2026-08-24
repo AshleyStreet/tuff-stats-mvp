@@ -4,6 +4,7 @@ import {
   chunk,
   decodeEntities,
   emptyStats,
+  hydrateStats,
   isStatsList,
   slugify,
   statsFromRow,
@@ -91,6 +92,12 @@ describe("statsFromRow", () => {
     expect(stats.tpnqb).toBe(30);
     expect(stats.pa1PT).toBe(1);
     expect(stats.safety).toBe(2);
+  });
+
+  it("maps SportsPress attempts onto deflags", () => {
+    expect(statsFromRow({ att: "11" }).deflag).toBe(11);
+    expect(statsFromRow({ attempts: "7" }).deflag).toBe(7);
+    expect(hydrateStats({ att: 4 } as never).deflag).toBe(4);
   });
 
   it("starts from empty stats for missing fields", () => {

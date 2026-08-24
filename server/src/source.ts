@@ -7,6 +7,7 @@ import {
   emptyStats,
   FRANCHISE_TEAM_NAMES,
   headerMap,
+  hydrateStats,
   isStatsList,
   statsFromRow,
   teamNameFromRosterTitle,
@@ -537,7 +538,14 @@ function readSeasonCache(year: string): SeasonCacheEntry | null {
   if (memory) return memory;
   const disk = readCacheFile<PlayersResponse>(seasonCacheName(year));
   if (!disk?.payload?.players?.length) return null;
-  const entry = { fingerprint: disk.fingerprint, data: disk.payload };
+  const data: PlayersResponse = {
+    ...disk.payload,
+    players: disk.payload.players.map((player) => ({
+      ...player,
+      stats: hydrateStats(player.stats)
+    }))
+  };
+  const entry = { fingerprint: disk.fingerprint, data };
   seasonCache.set(year, entry);
   return entry;
 }

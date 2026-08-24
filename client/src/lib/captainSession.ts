@@ -15,6 +15,11 @@ function isSlot(value: unknown): value is StatSlot {
   return typeof slot.key === "string" && typeof slot.customLabel === "string" && typeof slot.customValue === "string";
 }
 
+function migrateSlot(slot: StatSlot): StatSlot {
+  if ((slot.key as string) === "att") return { ...slot, key: "deflag" };
+  return slot;
+}
+
 export function emptyCaptainSession(): CaptainSession {
   return { slots: defaultSlots(), overrides: {}, defaultNote: "", notes: {} };
 }
@@ -24,7 +29,7 @@ export function loadCaptainSession(): CaptainSession {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyCaptainSession();
     const parsed = JSON.parse(raw) as Partial<CaptainSession>;
-    const slots = Array.isArray(parsed.slots) ? parsed.slots.filter(isSlot) : [];
+    const slots = Array.isArray(parsed.slots) ? parsed.slots.filter(isSlot).map(migrateSlot) : [];
     return {
       slots: slots.length === 5 ? slots : defaultSlots(),
       overrides: parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {},

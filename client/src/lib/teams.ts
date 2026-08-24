@@ -77,7 +77,7 @@ export function withCanonicalTeams(players: Player[], standings: TeamStanding[] 
 function blankStats(): Stats {
   return {
     gms: 0, tpqb: 0, tpnqb: 0, paTD: 0, ruTD: 0, recTD: 0, retTD: 0,
-    comp: 0, int: 0, sack: 0, att: 0, pa1PT: 0, ru1PT: 0, re1PT: 0,
+    comp: 0, int: 0, sack: 0, deflag: 0, pa1PT: 0, ru1PT: 0, re1PT: 0,
     pa2PT: 0, rec: 0, ru2PT: 0, re2PT: 0, ret2PT: 0, safety: 0
   };
 }

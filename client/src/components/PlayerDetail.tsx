@@ -279,6 +279,7 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                   <span>PaTD</span>
                   <span>INT</span>
                   <span>Sack</span>
+                  <span>DFL</span>
                 </div>
                 {gameLog.games.map((row) => {
                   const cells = (
@@ -293,6 +294,7 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                       <span>{row.stats.paTD}</span>
                       <span>{row.stats.int}</span>
                       <span>{row.stats.sack}</span>
+                      <span>{row.stats.deflag}</span>
                     </>
                   );
                   if (onSelectGame) {
@@ -324,13 +326,13 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
             <Row label="Receiving TDs" value={seasonView.stats.recTD} />
             <Row label="Return TDs" value={seasonView.stats.retTD} />
             <Row label="Completions" value={seasonView.stats.comp} />
-            <Row label="Attempts" value={seasonView.stats.att} />
             <Row label="Receptions" value={seasonView.stats.rec} />
           </section>
 
           <section>
             <h3><Shield size={17} /> Defense</h3>
             <Row label="Interceptions" value={seasonView.stats.int} />
+            <Row label="Deflags" value={seasonView.stats.deflag} />
             <Row label="Sacks" value={seasonView.stats.sack} />
             <Row label="Safeties" value={seasonView.stats.safety} />
           </section>

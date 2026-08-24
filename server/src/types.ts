@@ -9,7 +9,7 @@ export const statKeys = [
   "comp",
   "int",
   "sack",
-  "att",
+  "deflag",
   "pa1PT",
   "ru1PT",
   "re1PT",
