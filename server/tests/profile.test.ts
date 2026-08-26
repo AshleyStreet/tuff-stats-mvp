@@ -71,7 +71,9 @@ describe("careerFromSeasons", () => {
     expect(career.stats.gms).toBe(18);
     expect(career.stats.rec).toBe(32);
     expect(career.derived.totalTouchdowns).toBe(8);
-    expect(career.derived.totalPoints).toBe(50);
+    // Non-QB = (5+3) recTD × 6; QB pts still summed from seasons → 48 + 20
+    expect(career.stats.tpnqb).toBe(48);
+    expect(career.derived.totalPoints).toBe(68);
   });
 });
 

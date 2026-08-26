@@ -144,21 +144,24 @@ describe("statsFromRow", () => {
 });
 
 describe("buildPlayer", () => {
-  it("builds derived totals and a unique id with sourceId", () => {
+  it("derives non-QB points from receiving TDs and receiving conversions", () => {
     const stats = emptyStats();
     stats.gms = 8;
     stats.rec = 16;
     stats.recTD = 4;
+    stats.re1PT = 2;
+    stats.re2PT = 1;
     stats.paTD = 1;
     stats.tpqb = 10;
-    stats.tpnqb = 24;
+    stats.tpnqb = 999; // ignored — recalculated
 
     const player = buildPlayer("Dave S.", stats, { sourceId: "7588", team: "Wildcats" });
 
     expect(player.id).toBe("dave-s-7588");
     expect(player.team).toBe("Wildcats");
+    expect(player.stats.tpnqb).toBe(4 * 6 + 2 + 1 * 2); // 28
     expect(player.derived.totalTouchdowns).toBe(5);
-    expect(player.derived.totalPoints).toBe(34);
+    expect(player.derived.totalPoints).toBe(28 + 10);
     expect(player.derived.receptionsPerGame).toBe(2);
     expect(player.derived.receivingTouchdownsPerGame).toBe(0.5);
   });

@@ -97,6 +97,7 @@ Leave the Render service running until `https://stats.playtuff.ca` works, then d
 
 ## Notes
 
+- **`afterwhistle.ca` / `www`** serve the Afterwhistle marketing homepage. League apps live on subdomains (e.g. **`tuff.afterwhistle.ca`** → TUFF). Keep those hostnames in `SITE_HOSTS` for HTTPS.
 - No database. SportsPress is upstream; cache is the Docker volume `tuff-cache`.
 - No keepalive cron — the instance stays up.
-- ~$7/month for the box. No extra domain fee — `playtuff.ca` is already registered.
+- ~$7/month for the box. Product demos can use `afterwhistle.ca`; TUFF production can also stay on `stats.playtuff.ca` when that DNS is set.

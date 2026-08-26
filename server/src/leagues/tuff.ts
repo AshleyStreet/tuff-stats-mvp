@@ -7,7 +7,7 @@ export const tuffLeague: League = {
   name: "Toronto United Flag Football",
   shortName: "TUFF",
   sport: "flag-football",
-  hostnames: ["stats.playtuff.ca"],
+  hostnames: ["stats.playtuff.ca", "tuff.afterwhistle.ca"],
   serviceName: "tuff-stats-api",
   branding: {
     logo: "https://www.playtuff.ca/wp-content/uploads/2022/03/TUFF_logo_v2.png",

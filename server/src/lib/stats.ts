@@ -141,14 +141,23 @@ export function hydrateStats(raw: Partial<Stats> & { att?: number } | null | und
   return stats;
 }
 
+/**
+ * Non-QB points from distinct TUFF columns:
+ * receiving TDs (6) + receiving 1-pt conversions + receiving 2-pt conversions (×2).
+ */
+export function nonQbPointsFromStats(stats: Pick<Stats, "recTD" | "re1PT" | "re2PT">): number {
+  return stats.recTD * 6 + stats.re1PT + stats.re2PT * 2;
+}
+
 export function buildPlayer(
   name: string,
   stats: Stats,
   extras: { profileUrl?: string; team?: string; sourceId?: string } = {}
 ): Player {
-  const games = Math.max(stats.gms, 1);
-  const totalTouchdowns = stats.paTD + stats.ruTD + stats.recTD + stats.retTD;
-  const totalPoints = stats.tpnqb + stats.tpqb;
+  const next = { ...stats, tpnqb: nonQbPointsFromStats(stats) };
+  const games = Math.max(next.gms, 1);
+  const totalTouchdowns = next.paTD + next.ruTD + next.recTD + next.retTD;
+  const totalPoints = next.tpnqb + next.tpqb;
   const id = extras.sourceId ? `${slugify(name)}-${extras.sourceId}` : slugify(name);
 
   return {
@@ -157,12 +166,12 @@ export function buildPlayer(
     profileUrl: extras.profileUrl,
     team: extras.team,
     sourceId: extras.sourceId,
-    stats,
+    stats: next,
     derived: {
       totalTouchdowns,
       totalPoints,
-      receptionsPerGame: Number((stats.rec / games).toFixed(2)),
-      receivingTouchdownsPerGame: Number((stats.recTD / games).toFixed(2))
+      receptionsPerGame: Number((next.rec / games).toFixed(2)),
+      receivingTouchdownsPerGame: Number((next.recTD / games).toFixed(2))
     }
   };
 }

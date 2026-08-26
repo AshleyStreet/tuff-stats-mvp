@@ -10,6 +10,7 @@ const paTD = { key: "paTD", label: "Passing TDs", short: "PaTD" };
 /** TUFF / flag-football layout — matches the current board, profile, box score, and cards. */
 export const flagFootballPresentation: StatPresentation = {
   sortOptions: [
+    { key: "tpnqb", label: "Non-QB Points", short: "NQ" },
     { key: "totalPoints", label: "Total Points", short: "PTS" },
     recTD,
     rec,
@@ -19,24 +20,25 @@ export const flagFootballPresentation: StatPresentation = {
     paTD,
     { key: "gms", label: "Games Played", short: "GP" }
   ],
-  playerCardMini: [rec, recTD, int, sack, deflag],
+  playerCardMini: [rec, recTD, { key: "tpnqb", label: "Non-QB Points", short: "NQ" }, int, sack],
   playerCardFooter: [
     { key: "totalTouchdowns", label: "Total TDs", short: "total TD" },
-    { key: "recPerGame", label: "Receptions / game", short: "REC / game" }
+    { key: "tpnqb", label: "Non-QB points", short: "NQ" }
   ],
   heroKpis: [
     { key: "rec", label: "RECEPTIONS", short: "REC" },
     { key: "recTD", label: "REC TD", short: "REC TD" },
-    { key: "int", label: "INT", short: "INT" }
+    { key: "tpnqb", label: "NON-QB PTS", short: "NQ" }
   ],
   careerKpis: [
     { key: "totalPoints", label: "CAREER PTS", short: "PTS" },
-    { key: "totalTouchdowns", label: "CAREER TD", short: "TD" },
+    { key: "tpnqb", label: "NON-QB PTS", short: "NQ" },
     { key: "gms", label: "GAMES", short: "G" }
   ],
   seasonTableColumns: [
     { key: "gms", label: "Games", short: "G" },
     { key: "totalPoints", label: "Points", short: "Pts" },
+    { key: "tpnqb", label: "Non-QB", short: "NQ" },
     { key: "totalTouchdowns", label: "Touchdowns", short: "TD" }
   ],
   detailGroups: [
@@ -48,6 +50,7 @@ export const flagFootballPresentation: StatPresentation = {
         { key: "paTD", label: "Passing TDs", short: "PTD" },
         { key: "ruTD", label: "Rushing TDs", short: "RUSH" },
         { key: "recTD", label: "Receiving TDs", short: "RTD" },
+        { key: "tpnqb", label: "Non-QB Points", short: "NQ" },
         { key: "retTD", label: "Return TDs", short: "RET" },
         { key: "comp", label: "Completions", short: "CMP" },
         { key: "rec", label: "Receptions", short: "REC" }
@@ -116,7 +119,7 @@ export const flagFootballPresentation: StatPresentation = {
     { key: "retTD", label: "Return TDs", short: "RET" },
     { key: "gms", label: "Games played", short: "GP" },
     { key: "tpqb", label: "Points as QB", short: "QB" },
-    { key: "tpnqb", label: "Points as non-QB", short: "NQ" },
+    { key: "tpnqb", label: "Non-QB Points", short: "NQ" },
     { key: "pa1PT", label: "Passing 1-pt", short: "P1" },
     { key: "ru1PT", label: "Rushing 1-pt", short: "R1" },
     { key: "re1PT", label: "Receiving 1-pt", short: "C1" },

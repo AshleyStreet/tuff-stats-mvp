@@ -287,8 +287,7 @@ export default function App() {
         <aside className="sidebar">
           {seasons.length > 1 && (
             <>
-              <div className="eyebrow">SEASON</div>
-              <label className="field-label">BOARD</label>
+              <label className="field-label">SEASON</label>
               <select value={season} onChange={(event) => setSeason(event.target.value)}>
                 {seasons.map((item) => (
                   <option key={item.year} value={item.year}>
