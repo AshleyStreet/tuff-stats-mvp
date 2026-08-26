@@ -1,7 +1,7 @@
-# Reachable at http://<static-ip>/ until DOMAIN is set.
-# Set DOMAIN=stats.playtuff.ca (GoDaddy A record already pointing here) for HTTPS.
+# Plain HTTP on the static IP until SITE_HOSTS is set.
+# SITE_HOSTS=afterwhistle.ca, www.afterwhistle.ca, tuff.afterwhistle.ca
 
-{$DOMAIN:http://} {
+{$SITE_HOSTS:http://} {
 	encode gzip
 	reverse_proxy app:4000
 }

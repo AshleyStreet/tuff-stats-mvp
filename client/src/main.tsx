@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { CaptainTools } from "./components/CaptainTools";
+import { MarketingHome } from "./components/MarketingHome";
 import { LeagueProvider } from "./league/LeagueProvider";
+import { isMarketingHost } from "./lib/marketingHost";
 import "./styles.css";
 
 function Root() {
@@ -19,17 +21,27 @@ function Root() {
     return <AdminDashboard />;
   }
 
-  if (path === "/captain-tools" || path.startsWith("/captain-tools/")) {
-    return <CaptainTools />;
+  if (isMarketingHost()) {
+    return <MarketingHome />;
   }
 
-  return <App />;
+  if (path === "/captain-tools" || path.startsWith("/captain-tools/")) {
+    return (
+      <LeagueProvider>
+        <CaptainTools />
+      </LeagueProvider>
+    );
+  }
+
+  return (
+    <LeagueProvider>
+      <App />
+    </LeagueProvider>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <LeagueProvider>
-      <Root />
-    </LeagueProvider>
+    <Root />
   </StrictMode>
 );

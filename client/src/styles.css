@@ -258,6 +258,9 @@ select option {
   font: 700 11px "Barlow Condensed";
   letter-spacing: 1.2px;
 }
+.sidebar > .field-label:first-child {
+  margin-top: 0;
+}
 select {
   width: 100%;
   color: #eee;
@@ -849,7 +852,7 @@ div.team-logo-md { font-size: 10px; }
 }
 .season-table-head, .season-table-row {
   display: grid;
-  grid-template-columns: 54px 1fr 36px 40px 36px;
+  grid-template-columns: 54px minmax(0, 1fr) repeat(var(--season-stat-cols, 3), minmax(28px, 40px));
   gap: 8px;
   align-items: center;
   padding: 9px 11px;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { CalendarDays, ExternalLink, Printer, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
 import { toTradingCard, type TradingCardData } from "../lib/cards";
@@ -227,7 +227,10 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
               Includes {linkedCount} linked roster id{linkedCount === 1 ? "" : "s"} matched by jersey or team continuity.
             </p>
           )}
-          <div className="season-table">
+          <div
+            className="season-table"
+            style={{ "--season-stat-cols": presentation.seasonTableColumns.length } as CSSProperties}
+          >
             <div className="season-table-head">
               <span>Year</span><span>Team</span>
               {presentation.seasonTableColumns.map((column) => (

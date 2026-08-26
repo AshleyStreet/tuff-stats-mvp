@@ -4,8 +4,10 @@ import type { Player } from "../src/types.js";
 
 function player(name: string, opts: { team?: string; points?: number; recTD?: number; sourceId: string }): Player {
   const stats = emptyStats();
-  stats.tpnqb = opts.points ?? 0;
   stats.recTD = opts.recTD ?? 0;
+  // buildPlayer derives tpnqb from recTD + conversions; pad with 1-pt receiving to hit `points`
+  const fromTd = stats.recTD * 6;
+  stats.re1PT = Math.max(0, (opts.points ?? 0) - fromTd);
   return buildPlayer(name, stats, { team: opts.team, sourceId: opts.sourceId });
 }
 

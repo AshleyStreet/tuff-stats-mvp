@@ -12,6 +12,7 @@ describe("flag-football presentation schema", () => {
   it("keeps the current TUFF sort keys and labels", () => {
     expect(schema.sortOptions.map((column) => column.key)).toEqual([
       "totalPoints",
+      "tpnqb",
       "recTD",
       "rec",
       "int",
@@ -21,17 +22,25 @@ describe("flag-football presentation schema", () => {
       "gms"
     ]);
     expect(schema.sortOptions[0]?.label).toBe("Total Points");
+    expect(schema.sortOptions.find((column) => column.key === "tpnqb")?.label).toBe("Non-QB Points");
     expect(schema.sortOptions.find((column) => column.key === "deflag")?.label).toBe("Deflags");
   });
 
   it("keeps player-card mini stats and detail groups", () => {
-    expect(schema.playerCardMini.map((column) => column.key)).toEqual(["rec", "recTD", "int", "sack", "deflag"]);
-    expect(schema.playerCardFooter.map((column) => column.short)).toEqual(["total TD", "REC / game"]);
+    expect(schema.playerCardMini.map((column) => column.key)).toEqual([
+      "rec",
+      "recTD",
+      "tpnqb",
+      "int",
+      "sack"
+    ]);
+    expect(schema.playerCardFooter.map((column) => column.short)).toEqual(["total TD", "NQ"]);
     expect(schema.detailGroups.map((group) => group.title)).toEqual(["Offense", "Defense", "Conversions"]);
     expect(schema.detailGroups[0]?.columns.map((column) => column.key)).toEqual([
       "paTD",
       "ruTD",
       "recTD",
+      "tpnqb",
       "retTD",
       "comp",
       "rec"

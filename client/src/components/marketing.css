@@ -1,0 +1,682 @@
+/* Afterwhistle marketing — product funnel on apex hosts only. */
+
+html.marketing {
+  --aw-ink: #0a120e;
+  --aw-ink-2: #121c16;
+  --aw-ink-3: #18241c;
+  --aw-bone: #e8efe6;
+  --aw-muted: #8a9a8e;
+  --aw-signal: #d6ff4b;
+  --aw-signal-deep: #9fc41f;
+  --aw-line: rgba(232, 239, 230, 0.12);
+  --aw-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  color: var(--aw-bone);
+  background: var(--aw-ink);
+  scroll-behavior: smooth;
+}
+
+html.marketing body {
+  background: var(--aw-ink);
+  background-attachment: initial;
+}
+
+html.marketing body::before {
+  display: none;
+}
+
+.aw-shell {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  overflow-x: clip;
+}
+
+.aw-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 100% 70% at 70% -10%, rgba(214, 255, 75, 0.16), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 0% 40%, rgba(40, 90, 60, 0.45), transparent 50%),
+    linear-gradient(165deg, #0c1610 0%, #0a120e 42%, #060a08 100%);
+  animation: aw-glow 14s var(--aw-ease) infinite alternate;
+  /* Hero-only atmosphere height; rest of page uses section backgrounds */
+  height: 100vh;
+  max-height: 100vh;
+  pointer-events: none;
+}
+
+.aw-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  height: 100vh;
+  max-height: 100vh;
+  opacity: 0.4;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent min(11vw, 96px),
+      rgba(232, 239, 230, 0.035) min(11vw, 96px),
+      rgba(232, 239, 230, 0.035) calc(min(11vw, 96px) + 1px)
+    ),
+    linear-gradient(180deg, transparent 0%, transparent 58%, rgba(0, 0, 0, 0.35) 100%);
+  transform-origin: 50% 100%;
+  animation: aw-field-drift 18s var(--aw-ease) infinite alternate;
+}
+
+.aw-top,
+.aw-hero,
+.aw-proof,
+.aw-section,
+.aw-mid-cta,
+.aw-close,
+.aw-foot {
+  position: relative;
+  z-index: 1;
+}
+
+.aw-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 4.5rem;
+  padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+}
+
+.aw-wordmark {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-nav {
+  display: none;
+  align-items: center;
+  gap: 1.35rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.aw-nav a {
+  color: var(--aw-muted);
+  text-decoration: none;
+}
+
+.aw-nav a:hover {
+  color: var(--aw-bone);
+}
+
+.aw-nav-cta {
+  color: var(--aw-ink) !important;
+  background: var(--aw-signal);
+  padding: 0.55rem 0.9rem;
+  border-radius: 2px;
+}
+
+.aw-nav-cta:hover {
+  background: #e5ff7a !important;
+  color: var(--aw-ink) !important;
+}
+
+.aw-hero {
+  min-height: calc(100vh - 4.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 4vw, 3rem) clamp(3rem, 8vw, 5rem);
+  max-width: 52rem;
+}
+
+.aw-brand {
+  margin: 0 0 0.75rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 800;
+  font-size: clamp(3.5rem, 14vw, 7.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--aw-bone);
+}
+
+.aw-brand-sm {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  margin-bottom: 1rem;
+}
+
+.aw-headline {
+  margin: 0 0 1rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.65rem, 4.2vw, 2.35rem);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  max-width: 18ch;
+  color: var(--aw-bone);
+}
+
+.aw-headline-sm {
+  max-width: 22ch;
+  margin-bottom: 1.5rem;
+}
+
+.aw-headline-break {
+  display: block;
+  color: var(--aw-muted);
+  font-weight: 500;
+}
+
+.aw-lede {
+  margin: 0 0 1.75rem;
+  max-width: 36ch;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--aw-muted);
+}
+
+.aw-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.aw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0 1.35rem;
+  border-radius: 2px;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: transform 0.35s var(--aw-ease), background 0.35s var(--aw-ease), color 0.35s var(--aw-ease),
+    border-color 0.35s var(--aw-ease);
+}
+
+.aw-btn:hover {
+  transform: translateY(-2px);
+}
+
+.aw-btn-primary {
+  background: var(--aw-signal);
+  color: var(--aw-ink);
+}
+
+.aw-btn-primary:hover {
+  background: #e5ff7a;
+}
+
+.aw-btn-ghost {
+  border: 1px solid var(--aw-line);
+  color: var(--aw-bone);
+  background: transparent;
+}
+
+.aw-btn-ghost:hover {
+  border-color: rgba(214, 255, 75, 0.45);
+  color: var(--aw-signal);
+}
+
+/* Social proof strip — Linear/Notion pattern, sport labels not fake logos */
+.aw-proof {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.75rem clamp(1.25rem, 4vw, 3rem);
+  border-top: 1px solid var(--aw-line);
+  border-bottom: 1px solid var(--aw-line);
+  background: rgba(8, 14, 10, 0.85);
+}
+
+.aw-proof-label {
+  margin: 0;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-proof-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.75rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aw-bone);
+}
+
+.aw-section {
+  padding: clamp(4rem, 10vw, 7rem) clamp(1.25rem, 4vw, 3rem);
+  border-top: 1px solid var(--aw-line);
+  background: var(--aw-ink-2);
+}
+
+.aw-section-title {
+  margin: 0 0 0.5rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.aw-section-lede {
+  margin: 0 0 2.5rem;
+  color: var(--aw-muted);
+  max-width: 42ch;
+  line-height: 1.55;
+  font-size: 1.05rem;
+}
+
+.aw-section-lede a {
+  color: var(--aw-signal);
+  text-decoration: none;
+}
+
+.aw-section-lede a:hover {
+  text-decoration: underline;
+}
+
+.aw-pain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.75rem;
+  max-width: 40rem;
+}
+
+.aw-pain li {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--aw-signal-deep);
+}
+
+.aw-pain strong {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.aw-pain span {
+  color: var(--aw-muted);
+  line-height: 1.5;
+  max-width: 36ch;
+}
+
+.aw-product {
+  display: grid;
+  gap: 2.5rem;
+  background: linear-gradient(180deg, var(--aw-ink-2), var(--aw-ink-3));
+}
+
+.aw-product-copy .aw-section-lede {
+  margin-bottom: 0;
+}
+
+.aw-preview {
+  border: 1px solid var(--aw-line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0d1510;
+  max-width: 36rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.aw-preview-chrome {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--aw-line);
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.aw-preview-body {
+  padding: 1.25rem;
+}
+
+.aw-preview-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.aw-preview-brand strong {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 1.5rem;
+  letter-spacing: 0.06em;
+  color: #e31b23;
+}
+
+.aw-preview-brand span {
+  font-size: 0.85rem;
+  color: var(--aw-muted);
+}
+
+.aw-preview-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.aw-preview-panel {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--aw-line);
+}
+
+.aw-preview-kicker {
+  margin: 0 0 0.65rem;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aw-signal-deep);
+}
+
+.aw-preview-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.aw-preview-panel li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  font-size: 0.95rem;
+}
+
+.aw-preview-panel li span {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  color: var(--aw-muted);
+  min-width: 1.1rem;
+}
+
+.aw-preview-panel em {
+  margin-left: auto;
+  font-style: normal;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--aw-bone);
+}
+
+.aw-how {
+  background: var(--aw-ink);
+}
+
+.aw-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2rem;
+  max-width: 40rem;
+}
+
+.aw-steps li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.aw-step-num {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+  color: var(--aw-signal-deep);
+  line-height: 1.2;
+}
+
+.aw-steps strong {
+  display: block;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.aw-steps p {
+  margin: 0;
+  color: var(--aw-muted);
+  line-height: 1.5;
+  max-width: 34ch;
+}
+
+.aw-audience-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2rem;
+  max-width: 44rem;
+}
+
+.aw-audience-list strong {
+  display: block;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.aw-audience-list p {
+  margin: 0;
+  color: var(--aw-muted);
+  line-height: 1.5;
+  max-width: 36ch;
+}
+
+.aw-mid-cta {
+  padding: clamp(3.5rem, 8vw, 5.5rem) clamp(1.25rem, 4vw, 3rem);
+  border-top: 1px solid var(--aw-line);
+  background:
+    radial-gradient(ellipse 80% 80% at 100% 0%, rgba(214, 255, 75, 0.1), transparent 55%),
+    var(--aw-ink-3);
+}
+
+.aw-mid-cta .aw-section-lede {
+  margin-bottom: 1.5rem;
+}
+
+.aw-faq {
+  background: var(--aw-ink-2);
+}
+
+.aw-faq-list {
+  display: grid;
+  gap: 0;
+  max-width: 40rem;
+  border-top: 1px solid var(--aw-line);
+}
+
+.aw-faq-item {
+  border-bottom: 1px solid var(--aw-line);
+}
+
+.aw-faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 1.15rem 0;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.aw-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.aw-faq-item summary::after {
+  content: "+";
+  float: right;
+  color: var(--aw-signal-deep);
+  font-weight: 700;
+}
+
+.aw-faq-item[open] summary::after {
+  content: "–";
+}
+
+.aw-faq-item p {
+  margin: 0 0 1.15rem;
+  color: var(--aw-muted);
+  line-height: 1.55;
+  max-width: 42ch;
+}
+
+.aw-close {
+  padding: clamp(4rem, 10vw, 7rem) clamp(1.25rem, 4vw, 3rem);
+  border-top: 1px solid var(--aw-line);
+  background: var(--aw-ink);
+}
+
+.aw-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem clamp(1.25rem, 4vw, 3rem) 2rem;
+  border-top: 1px solid var(--aw-line);
+  font-size: 0.9rem;
+  color: var(--aw-muted);
+  background: var(--aw-ink);
+}
+
+.aw-foot-links {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.aw-foot a {
+  color: var(--aw-bone);
+  text-decoration: none;
+}
+
+.aw-foot a:hover {
+  color: var(--aw-signal);
+}
+
+.aw-rise {
+  opacity: 0;
+  transform: translateY(1.1rem);
+  animation: aw-rise 0.9s var(--aw-ease) forwards;
+}
+
+.aw-rise-2 {
+  animation-delay: 0.12s;
+}
+
+.aw-rise-3 {
+  animation-delay: 0.22s;
+}
+
+.aw-rise-4 {
+  animation-delay: 0.34s;
+}
+
+@keyframes aw-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes aw-glow {
+  from {
+    filter: saturate(1);
+  }
+  to {
+    filter: saturate(1.15) brightness(1.04);
+  }
+}
+
+@keyframes aw-field-drift {
+  from {
+    transform: scale(1) translateY(0);
+  }
+  to {
+    transform: scale(1.03) translateY(-1.5%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aw-rise,
+  .aw-atmosphere,
+  .aw-field {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  html.marketing {
+    scroll-behavior: auto;
+  }
+}
+
+@media (min-width: 720px) {
+  .aw-nav {
+    display: flex;
+  }
+
+  .aw-preview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 960px) {
+  .aw-product {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: center;
+    gap: 3.5rem;
+  }
+
+  .aw-steps {
+    gap: 2.5rem;
+  }
+
+  .aw-audience-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: none;
+    gap: 2rem;
+  }
+}
