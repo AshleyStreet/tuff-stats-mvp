@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Passion Soccer">
+  <rect width="64" height="64" rx="12" fill="#1a5f4a"/>
+  <circle cx="32" cy="32" r="16" fill="#f4efe6" stroke="#0f3d30" stroke-width="2"/>
+  <path d="M32 16l4.5 9.5 10.5.8-8 6.8 2.4 10.2L32 38.5 22.6 43.3l2.4-10.2-8-6.8 10.5-.8z" fill="#1a5f4a"/>
+  <rect x="8" y="50" width="48" height="4" rx="1" fill="#e8b84a"/>
+</svg>

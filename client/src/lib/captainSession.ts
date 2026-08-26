@@ -1,6 +1,10 @@
 import { defaultSlots, type PlayerOverrides, type StatSlot } from "./cardStats";
 
-const STORAGE_KEY = "tuff-captain-tools";
+const LEGACY_STORAGE_KEY = "tuff-captain-tools";
+
+export function captainStorageKey(slug: string) {
+  return `captain-tools:${slug}`;
+}
 
 export type CaptainSession = {
   slots: StatSlot[];
@@ -24,9 +28,10 @@ export function emptyCaptainSession(): CaptainSession {
   return { slots: defaultSlots(), overrides: {}, defaultNote: "", notes: {} };
 }
 
-export function loadCaptainSession(): CaptainSession {
+export function loadCaptainSession(slug = "tuff"): CaptainSession {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const key = captainStorageKey(slug);
+    const raw = sessionStorage.getItem(key) ?? (slug === "tuff" ? sessionStorage.getItem(LEGACY_STORAGE_KEY) : null);
     if (!raw) return emptyCaptainSession();
     const parsed = JSON.parse(raw) as Partial<CaptainSession>;
     const slots = Array.isArray(parsed.slots) ? parsed.slots.filter(isSlot).map(migrateSlot) : [];
@@ -41,9 +46,9 @@ export function loadCaptainSession(): CaptainSession {
   }
 }
 
-export function saveCaptainSession(session: CaptainSession) {
+export function saveCaptainSession(session: CaptainSession, slug = "tuff") {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    sessionStorage.setItem(captainStorageKey(slug), JSON.stringify(session));
   } catch {
     /* private mode / quota — keep working in memory */
   }

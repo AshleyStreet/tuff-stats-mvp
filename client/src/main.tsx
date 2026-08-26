@@ -1,7 +1,9 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { CaptainTools } from "./components/CaptainTools";
+import { LeagueProvider } from "./league/LeagueProvider";
 import "./styles.css";
 
 function Root() {
@@ -13,6 +15,10 @@ function Root() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    return <AdminDashboard />;
+  }
+
   if (path === "/captain-tools" || path.startsWith("/captain-tools/")) {
     return <CaptainTools />;
   }
@@ -22,6 +28,8 @@ function Root() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Root />
+    <LeagueProvider>
+      <Root />
+    </LeagueProvider>
   </StrictMode>
 );

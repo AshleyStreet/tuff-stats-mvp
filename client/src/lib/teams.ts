@@ -1,4 +1,5 @@
 import type { Player, StatKey, Stats, TeamStanding } from "../types";
+import { tuffPublicLeague } from "../league/tuff";
 
 export type TeamSummary = {
   name: string;
@@ -13,23 +14,9 @@ export type TeamSummary = {
   logoUrl?: string;
 };
 
-const FRANCHISE_TEAM_NAMES = [
-  "Brawlers",
-  "Bulldogs",
-  "Cobras",
-  "Knights",
-  "Lumberjacks",
-  "Menace",
-  "Rhinos",
-  "Sirens",
-  "Stallions",
-  "Storm Crows",
-  "Wildcats",
-  "Wolfhounds",
-  "Yetis"
-];
+const DEFAULT_FRANCHISE_TEAM_NAMES = tuffPublicLeague.franchiseTeamNames;
 
-export function canonicalTeamName(raw: string, aliases: string[] = FRANCHISE_TEAM_NAMES): string {
+export function canonicalTeamName(raw: string, aliases: string[] = DEFAULT_FRANCHISE_TEAM_NAMES): string {
   const name = raw.replace(/\s+/g, " ").trim();
   if (!name) return name;
   const lower = name.toLowerCase();
@@ -47,10 +34,10 @@ export function canonicalTeamName(raw: string, aliases: string[] = FRANCHISE_TEA
   return suffixHits[0] ?? name;
 }
 
-function teamAliases(standings: TeamStanding[]): string[] {
+function teamAliases(standings: TeamStanding[], franchiseNames: string[] = DEFAULT_FRANCHISE_TEAM_NAMES): string[] {
   const seen = new Set<string>();
   const aliases: string[] = [];
-  for (const name of [...standings.map((row) => row.name), ...FRANCHISE_TEAM_NAMES]) {
+  for (const name of [...standings.map((row) => row.name), ...franchiseNames]) {
     const trimmed = name.replace(/\s+/g, " ").trim();
     const key = trimmed.toLowerCase();
     if (!trimmed || seen.has(key)) continue;
@@ -65,8 +52,12 @@ export function teamLogoUrl(name: string | undefined, logos?: Record<string, str
   return logos[name] ?? logos[canonicalTeamName(name)];
 }
 
-export function withCanonicalTeams(players: Player[], standings: TeamStanding[] = []): Player[] {
-  const aliases = teamAliases(standings);
+export function withCanonicalTeams(
+  players: Player[],
+  standings: TeamStanding[] = [],
+  franchiseNames: string[] = DEFAULT_FRANCHISE_TEAM_NAMES
+): Player[] {
+  const aliases = teamAliases(standings, franchiseNames);
   return players.map((player) => {
     if (!player.team) return player;
     const team = canonicalTeamName(player.team, aliases);
@@ -78,7 +69,9 @@ function blankStats(): Stats {
   return {
     gms: 0, tpqb: 0, tpnqb: 0, paTD: 0, ruTD: 0, recTD: 0, retTD: 0,
     comp: 0, int: 0, sack: 0, deflag: 0, pa1PT: 0, ru1PT: 0, re1PT: 0,
-    pa2PT: 0, rec: 0, ru2PT: 0, re2PT: 0, ret2PT: 0, safety: 0
+    pa2PT: 0, rec: 0, ru2PT: 0, re2PT: 0, ret2PT: 0, safety: 0,
+    ab: 0, r: 0, h: 0, doubles: 0, triples: 0, hr: 0, rbi: 0, bb: 0, so: 0, sb: 0,
+    goals: 0, yellowCards: 0, redCards: 0
   };
 }
 
@@ -93,9 +86,10 @@ function sumStats(left: Stats, right: Stats): Stats {
 export function buildTeamSummaries(
   players: Player[],
   standings: TeamStanding[] = [],
-  logos: Record<string, string> = {}
+  logos: Record<string, string> = {},
+  franchiseNames: string[] = DEFAULT_FRANCHISE_TEAM_NAMES
 ): TeamSummary[] {
-  const aliases = teamAliases(standings);
+  const aliases = teamAliases(standings, franchiseNames);
   const byTeam = new Map<string, Player[]>();
   for (const player of players) {
     const raw = player.team?.trim();

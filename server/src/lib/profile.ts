@@ -1,14 +1,7 @@
 import { emptyStats, buildPlayer } from "./stats.js";
-import { statKeys, type Player, type Stats } from "../types.js";
+import { statKeys, type Player, type PlayerSeason, type Stats } from "../domain/types.js";
 
-export type SeasonAppearance = {
-  season: string;
-  team?: string;
-  stats: Stats;
-  derived: Player["derived"];
-  sourceId?: string;
-  linked?: boolean;
-};
+export type SeasonAppearance = PlayerSeason;
 
 export type SeasonCandidate = {
   season: string;

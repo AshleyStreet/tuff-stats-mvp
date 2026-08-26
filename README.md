@@ -76,6 +76,10 @@ npm start
 
 Then open http://localhost:4000
 
+## Host on Lightsail
+
+Use a Lightsail instance plus `https://stats.playtuff.ca` if you do not want an `.onrender.com` URL. Step-by-step: [deploy/lightsail/README.md](deploy/lightsail/README.md).
+
 ## Production note
 
 The UI shows when season data was last fetched. Visitors always use the shared cache; they cannot force a source re-scrape.

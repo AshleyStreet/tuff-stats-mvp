@@ -4,8 +4,10 @@ client/node_modules
 server/dist
 client/dist
 server/.cache
+server/.tenants
 .env
 server/.env
+deploy/lightsail/.env
 .DS_Store
 *.log
 .vite

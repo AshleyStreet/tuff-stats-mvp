@@ -1,9 +1,18 @@
 export type StatKey =
   | "gms" | "tpqb" | "tpnqb" | "paTD" | "ruTD" | "recTD" | "retTD"
   | "comp" | "int" | "sack" | "deflag" | "pa1PT" | "ru1PT" | "re1PT"
-  | "pa2PT" | "rec" | "ru2PT" | "re2PT" | "ret2PT" | "safety";
+  | "pa2PT" | "rec" | "ru2PT" | "re2PT" | "ret2PT" | "safety"
+  | "ab" | "r" | "h" | "doubles" | "triples" | "hr" | "rbi" | "bb" | "so" | "sb"
+  | "goals" | "yellowCards" | "redCards";
 
 export type Stats = Record<StatKey, number>;
+
+export type LeagueRef = {
+  slug: string;
+  name: string;
+  shortName: string;
+  sport: string;
+};
 
 export interface Player {
   id: string;
@@ -24,6 +33,8 @@ export interface SeasonInfo {
   year: string;
   label: string;
   slug: string;
+  seasonId?: number;
+  url?: string;
 }
 
 export interface SeasonAppearance {
@@ -50,7 +61,7 @@ export interface PlayerProfile {
     stats: Stats;
     derived: Player["derived"];
   };
-  meta: { fetchedAt: string };
+  meta: { fetchedAt: string; league?: LeagueRef };
 }
 
 export interface TeamStanding {
@@ -88,7 +99,7 @@ export interface ScheduleGame {
 export interface ScheduleResponse {
   season: string;
   games: ScheduleGame[];
-  meta: { fetchedAt: string; total: number };
+  meta: { fetchedAt: string; total: number; league?: LeagueRef };
 }
 
 export interface BoxScorePlayer {
@@ -106,7 +117,7 @@ export interface BoxScoreSide extends ScheduleSide {
 export interface GameDetail {
   game: ScheduleGame;
   sides: BoxScoreSide[];
-  meta: { fetchedAt: string };
+  meta: { fetchedAt: string; league?: LeagueRef };
 }
 
 export interface GameLogEntry {
@@ -125,13 +136,13 @@ export interface PlayerGameLog {
   season: string;
   sourceIds: string[];
   games: GameLogEntry[];
-  meta: { fetchedAt: string };
+  meta: { fetchedAt: string; league?: LeagueRef };
 }
 
 export interface PlayersResponse {
   players: Player[];
   meta: {
-    source: "sportspress" | "html";
+    source: "sportspress" | "html" | "fixture";
     fetchedAt: string;
     total: number;
     teams: string[];
@@ -139,5 +150,6 @@ export interface PlayersResponse {
     seasonLabel: string;
     standings?: TeamStanding[];
     teamLogos?: Record<string, string>;
+    league?: LeagueRef;
   };
 }

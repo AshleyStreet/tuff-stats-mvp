@@ -1,0 +1,7 @@
+# Reachable at http://<static-ip>/ until DOMAIN is set.
+# Set DOMAIN=stats.playtuff.ca (GoDaddy A record already pointing here) for HTTPS.
+
+{$DOMAIN:http://} {
+	encode gzip
+	reverse_proxy app:4000
+}

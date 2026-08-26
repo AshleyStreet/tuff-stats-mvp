@@ -1,0 +1,23 @@
+name: Deploy Lightsail
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull and rebuild on the instance
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/tuff-stats
+            sudo git fetch origin
+            sudo git checkout feat/lightsail
+            sudo git pull --ff-only origin feat/lightsail
+            sudo docker compose up -d --build
+            curl -fsS --retry 8 --retry-delay 5 http://127.0.0.1/api/health

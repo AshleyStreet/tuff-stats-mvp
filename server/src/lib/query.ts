@@ -1,4 +1,4 @@
-import type { Player, StatKey } from "../types.js";
+import type { Player, StatKey } from "../domain/types.js";
 
 export type PlayerQuery = {
   search?: string;

@@ -1,4 +1,6 @@
 import { initials, splitPlayerName, type CardStatLine, type TradingCardData } from "../lib/cards";
+import { useLeague, usePresentation } from "../league/LeagueProvider";
+import { readStat } from "../league/readStat";
 import { TeamLogo } from "./TeamLogo";
 
 interface Props {
@@ -7,24 +9,21 @@ interface Props {
   onSelect?: () => void;
 }
 
-const defaultLine = (card: TradingCardData): CardStatLine[] =>
-  [
-    { label: "PTS", value: String(card.derived.totalPoints) },
-    { label: "TD", value: String(card.derived.totalTouchdowns) },
-    { label: "REC", value: String(card.stats.rec) },
-    { label: "INT", value: String(card.stats.int) },
-    { label: "SACK", value: String(card.stats.sack) }
-  ];
-
 export function TradingCard({ card, selected, onSelect }: Props) {
+  const league = useLeague();
+  const presentation = usePresentation();
   const { first, last } = splitPlayerName(card.name);
   const jersey = card.number != null && String(card.number).trim() ? String(card.number).trim() : "";
   const className = `trading-card${selected ? " selected" : ""}${onSelect ? " interactive" : ""}`;
-  const stats = card.lineItems?.length ? card.lineItems : defaultLine(card);
+  const fallbackLine: CardStatLine[] = presentation.cardDefaults.map((column) => ({
+    label: column.short,
+    value: String(readStat(card, column.key))
+  }));
+  const stats = card.lineItems?.length ? card.lineItems : fallbackLine;
   const face = (
     <div className="trading-card-face">
       <div className="tc-banner">
-        <span>TUFF</span>
+        <span>{league.shortName}</span>
         <span>{card.season}</span>
       </div>
 
@@ -59,8 +58,8 @@ export function TradingCard({ card, selected, onSelect }: Props) {
       </div>
 
       <div className="tc-footer">
-        <span>Toronto United Flag Football</span>
-        <span>{card.stats.gms} GP</span>
+        <span>{league.name}</span>
+        <span>{readStat(card, "gms")} GP</span>
       </div>
     </div>
   );

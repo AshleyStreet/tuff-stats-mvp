@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
-import { formatUpdatedAt, getPlayers, getSchedule, peekSeasonPlayers } from "./api";
+import { BrandMark } from "./league/BrandMark";
+import { useLeague, usePresentation } from "./league/LeagueProvider";
+import { readStat } from "./league/readStat";
+import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers } from "./api";
 import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
 import { PrintSheet } from "./components/PrintSheet";
+import { SportSpinner } from "./components/SportSpinner";
 import { TeamCard } from "./components/TeamCard";
 import { TeamLogo } from "./components/TeamLogo";
 import { TradingCard } from "./components/TradingCard";
@@ -14,32 +18,23 @@ import { filterAndSortPlayers } from "./lib/query";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
 import { usePrintCards } from "./lib/usePrintCards";
-import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, StatKey } from "./types";
+import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInfo } from "./types";
 
 type Tab = "players" | "teams" | "schedule" | "cards";
 type ScheduleView = "all" | "results" | "upcoming";
 
-const PUBLIC_SEASON = "2026";
-
-const sorts: { key: StatKey | "totalPoints"; label: string }[] = [
-  { key: "totalPoints", label: "Total Points" },
-  { key: "recTD", label: "Receiving TDs" },
-  { key: "rec", label: "Receptions" },
-  { key: "int", label: "Interceptions" },
-  { key: "sack", label: "Sacks" },
-  { key: "deflag", label: "Deflags" },
-  { key: "paTD", label: "Passing TDs" },
-  { key: "gms", label: "Games Played" }
-];
-
 export default function App() {
+  const league = useLeague();
+  const presentation = usePresentation();
+  const sorts = presentation.sortOptions;
   const [data, setData] = useState<PlayersResponse | null>(null);
-  const season = PUBLIC_SEASON;
+  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
+  const [season, setSeason] = useState(league.publicSeason);
   const [tab, setTab] = useState<Tab>("players");
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
-  const [sort, setSort] = useState<StatKey | "totalPoints">("totalPoints");
+  const [sort, setSort] = useState(sorts[0]?.key ?? "totalPoints");
   const [selected, setSelected] = useState<Player | null>(null);
   const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,16 +52,46 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const next = presentation.sortOptions[0]?.key;
+    if (next) setSort(next);
+  }, [league.slug, presentation.sortOptions]);
+
+  useEffect(() => {
+    setSeason(league.publicSeason);
+    setSeasons([]);
+    getSeasons()
+      .then((result) => {
+        setSeasons(result.seasons);
+        setSeason((current) =>
+          result.seasons.some((item) => item.year === current)
+            ? current
+            : result.defaultSeason || league.publicSeason
+        );
+      })
+      .catch(() => {
+        setSeasons([{ year: league.publicSeason, label: `${league.publicSeason} Season`, slug: "" }]);
+      });
+  }, [league.slug, league.publicSeason]);
+
+  useEffect(() => {
+    setActiveTeam(null);
+    setTeam("");
+    setSelected(null);
+    setSelectedGame(null);
+    setSchedule(null);
+  }, [season, league.slug]);
+
+  useEffect(() => {
     let cancelled = false;
     const cached = peekSeasonPlayers(season);
     if (cached?.meta.standings?.length) {
       setData(cached);
       setLoading(false);
       setError(null);
-      return;
+    } else {
+      setLoading(true);
     }
 
-    setLoading(true);
     getPlayers(season)
       .then((result) => {
         if (cancelled) return;
@@ -92,7 +117,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [season]);
+  }, [season, league.slug]);
 
   useEffect(() => {
     if (tab !== "schedule") return;
@@ -113,20 +138,26 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [season, tab]);
+  }, [season, tab, league.slug]);
 
   useEffect(() => {
     if (tab !== "schedule") setSelectedGame(null);
   }, [tab]);
 
   const rosterPlayers = useMemo(
-    () => withCanonicalTeams(data?.players ?? [], data?.meta.standings ?? []),
-    [data?.players, data?.meta.standings]
+    () => withCanonicalTeams(data?.players ?? [], data?.meta.standings ?? [], league.franchiseTeamNames),
+    [data?.players, data?.meta.standings, league.franchiseTeamNames]
   );
 
   const teamSummaries = useMemo(
-    () => buildTeamSummaries(rosterPlayers, data?.meta.standings ?? [], data?.meta.teamLogos ?? {}),
-    [rosterPlayers, data?.meta.standings, data?.meta.teamLogos]
+    () =>
+      buildTeamSummaries(
+        rosterPlayers,
+        data?.meta.standings ?? [],
+        data?.meta.teamLogos ?? {},
+        league.franchiseTeamNames
+      ),
+    [rosterPlayers, data?.meta.standings, data?.meta.teamLogos, league.franchiseTeamNames]
   );
 
   const filteredTeams = useMemo(() => {
@@ -155,9 +186,9 @@ export default function App() {
   );
   const sortLabel = sorts.find((item) => item.key === sort)?.label ?? "Leaders";
   const seasonLabel = data?.meta.seasonLabel ?? `${season} Season`;
-  const statValue = (player: Player) => (sort === "totalPoints" ? player.derived.totalPoints : player.stats[sort]);
+  const statValue = (player: Player) => readStat(player, sort);
   const updatedLabel = formatUpdatedAt(data?.meta.fetchedAt, now);
-  const sourceLabel = data?.meta.source === "sportspress" ? "SportsPress" : "TUFF table";
+  const sourceLabel = data?.meta.source === "sportspress" ? "SportsPress" : league.copy.htmlSourceLabel;
   const activeTeamSummary = activeTeam ? teamSummaries.find((item) => item.name === activeTeam) : null;
 
   const filteredGames = useMemo(() => {
@@ -228,17 +259,7 @@ export default function App() {
     <>
     <div className={`app-shell${selected || selectedGame ? " detail-open" : ""}`}>
       <header className="topbar">
-        <div className="brand">
-          <img
-            className="brand-logo"
-            src="https://www.playtuff.ca/wp-content/uploads/2022/03/TUFF_logo_v2.png"
-            alt="Toronto United Flag Football"
-          />
-          <div>
-            <strong>TUFF</strong>
-            <span>TORONTO UNITED FLAG FOOTBALL</span>
-          </div>
-        </div>
+        <BrandMark />
         <nav>
           <button type="button" className={tab === "players" && !activeTeam ? "active" : ""} onClick={goPlayers}>
             Players
@@ -264,6 +285,20 @@ export default function App() {
 
       <div className="page-grid">
         <aside className="sidebar">
+          {seasons.length > 1 && (
+            <>
+              <div className="eyebrow">SEASON</div>
+              <label className="field-label">BOARD</label>
+              <select value={season} onChange={(event) => setSeason(event.target.value)}>
+                {seasons.map((item) => (
+                  <option key={item.year} value={item.year}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
           {(tab === "players" || tab === "cards") && (
             <>
               <div className="eyebrow">{tab === "cards" ? "FIND A CARD" : "FIND A PLAYER"}</div>
@@ -279,7 +314,7 @@ export default function App() {
               </select>
 
               <label className="field-label">SORT BY</label>
-              <select value={sort} onChange={(event) => setSort(event.target.value as StatKey | "totalPoints")}>
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
                 {sorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
               </select>
 
@@ -333,7 +368,7 @@ export default function App() {
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roster…" />
               </label>
               <label className="field-label">SORT BY</label>
-              <select value={sort} onChange={(event) => setSort(event.target.value as StatKey | "totalPoints")}>
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
                 {sorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
               </select>
               <div className="leaders-block">
@@ -463,20 +498,19 @@ export default function App() {
             </div>
           </div>
 
-          {error && tab !== "schedule" && <div className="error-card"><strong>Couldn’t load TUFF.</strong><span>{error}</span></div>}
+          {error && tab !== "schedule" && (
+            <div className="error-card">
+              <strong>{league.copy.loadErrorTitle}</strong>
+              <span>{error}</span>
+            </div>
+          )}
           {scheduleError && tab === "schedule" && (
             <div className="error-card"><strong>Couldn’t load schedule.</strong><span>{scheduleError}</span></div>
           )}
 
           {((loading && tab !== "schedule") || (scheduleLoading && tab === "schedule")) && (
             <div className="loading" role="status" aria-live="polite">
-              <div className="football-spinner" aria-hidden="true">
-                <div className="football">
-                  <span className="football-stripe football-stripe-left" />
-                  <span className="football-stripe football-stripe-right" />
-                  <span className="football-laces" />
-                </div>
-              </div>
+              <SportSpinner />
               <span>{tab === "schedule" ? `Loading ${season} schedule…` : data ? `Loading ${season}…` : "Loading league stats…"}</span>
             </div>
           )}

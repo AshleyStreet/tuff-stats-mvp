@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Printer, RotateCcw, Search, X } from "lucide-react";
 import { getPlayers, getSeasons, peekSeasonPlayers } from "../api";
+import { BrandMark } from "../league/BrandMark";
+import { useLeague, usePresentation } from "../league/LeagueProvider";
 import { toTradingCard } from "../lib/cards";
 import {
-  CARD_STAT_OPTIONS,
   defaultSlots,
   emptySlots,
   resolveLineItems,
@@ -25,10 +26,12 @@ function goLeague() {
 }
 
 export function CaptainTools() {
-  const stored = useMemo(() => loadCaptainSession(), []);
+  const league = useLeague();
+  const presentation = usePresentation();
+  const stored = useMemo(() => loadCaptainSession(league.slug), [league.slug]);
   const [data, setData] = useState<PlayersResponse | null>(null);
   const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
-  const [season, setSeason] = useState("2026");
+  const [season, setSeason] = useState(league.publicSeason);
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
   const [loading, setLoading] = useState(true);
@@ -49,9 +52,9 @@ export function CaptainTools() {
         );
       })
       .catch(() => {
-        setSeasons([{ year: "2026", label: "2026 Season", slug: "2026-tuff-stats" }]);
+        setSeasons([{ year: league.publicSeason, label: `${league.publicSeason} Season`, slug: "" }]);
       });
-  }, []);
+  }, [league.publicSeason, league.slug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,20 +84,20 @@ export function CaptainTools() {
     return () => {
       cancelled = true;
     };
-  }, [season]);
+  }, [season, league.slug]);
 
   useEffect(() => {
-    saveCaptainSession({ slots, overrides, defaultNote, notes });
-  }, [slots, overrides, defaultNote, notes]);
+    saveCaptainSession({ slots, overrides, defaultNote, notes }, league.slug);
+  }, [slots, overrides, defaultNote, notes, league.slug]);
 
   const players = useMemo(
     () =>
       filterAndSortPlayers(data?.players ?? [], {
         search,
         team,
-        sort: "totalPoints"
+        sort: presentation.sortOptions[0]?.key ?? "totalPoints"
       }),
-    [data?.players, search, team]
+    [data?.players, search, team, presentation.sortOptions]
   );
 
   const selected = players.find((player) => player.id === selectedId) ?? null;
@@ -102,7 +105,7 @@ export function CaptainTools() {
   function cardFor(player: Player) {
     const personal = (notes[player.id] ?? "").trim() || defaultNote.trim();
     return toTradingCard(player, season, data?.meta.teamLogos, {
-      lineItems: resolveLineItems(player, slots, overrides[player.id]),
+      lineItems: resolveLineItems(player, slots, overrides[player.id], presentation.cardOptions),
       note: personal
     });
   }
@@ -168,17 +171,7 @@ export function CaptainTools() {
     <>
       <div className={`app-shell captain-tools${selected ? " detail-open" : ""}`}>
         <header className="topbar">
-          <div className="brand">
-            <img
-              className="brand-logo"
-              src="https://www.playtuff.ca/wp-content/uploads/2022/03/TUFF_logo_v2.png"
-              alt="Toronto United Flag Football"
-            />
-            <div>
-              <strong>TUFF</strong>
-              <span>CAPTAIN TOOLS · SESSION ONLY</span>
-            </div>
-          </div>
+          <BrandMark subtitle="CAPTAIN TOOLS · SESSION ONLY" />
           <nav>
             <button type="button" onClick={goLeague}>
               League stats
@@ -229,7 +222,7 @@ export function CaptainTools() {
                   Slot {index + 1}
                   <select value={slot.key} onChange={(event) => setSlotKey(index, event.target.value as SlotKey)}>
                     <option value="custom">Custom / write-in</option>
-                    {CARD_STAT_OPTIONS.map((option) => (
+                    {presentation.cardOptions.map((option) => (
                       <option key={option.key} value={option.key}>
                         {option.short} · {option.label}
                       </option>
@@ -255,7 +248,7 @@ export function CaptainTools() {
               </div>
             ))}
             <div className="captain-slot-actions">
-              <button type="button" className="text-action" onClick={() => setSlots(defaultSlots())}>
+              <button type="button" className="text-action" onClick={() => setSlots(defaultSlots(presentation.cardDefaults))}>
                 <RotateCcw size={14} /> Default stats
               </button>
               <button type="button" className="text-action" onClick={() => setSlots(emptySlots())}>
@@ -307,7 +300,7 @@ export function CaptainTools() {
 
             {error && (
               <div className="error-card">
-                <strong>Couldn’t load TUFF.</strong>
+                <strong>{league.copy.loadErrorTitle}</strong>
                 <span>{error}</span>
               </div>
             )}
@@ -353,7 +346,7 @@ export function CaptainTools() {
                 onChange={(event) => setPlayerNote(selected.id, event.target.value)}
               />
               {Array.from({ length: SLOT_COUNT }, (_, index) => {
-                const live = resolveLineItems(selected, slots, {})[index];
+                const live = resolveLineItems(selected, slots, {}, presentation.cardOptions)[index];
                 const override = overrides[selected.id]?.[index];
                 return (
                   <div className="captain-edit-row" key={`edit-${selected.id}-${index}`}>
