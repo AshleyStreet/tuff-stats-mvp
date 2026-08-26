@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { ExternalLink, X } from "lucide-react";
 import { getGame } from "../api";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
@@ -27,6 +27,11 @@ function formatGameWhen(iso: string) {
   });
 }
 
+function formatBoxStat(value: number) {
+  if (!value) return <span className="box-zero" />;
+  return value;
+}
+
 function sumSide(side: BoxScoreSide, columns: StatColumn[]) {
   const totals: Record<string, number> = {};
   for (const column of columns) totals[column.key] = 0;
@@ -36,6 +41,25 @@ function sumSide(side: BoxScoreSide, columns: StatColumn[]) {
     }
   }
   return totals;
+}
+
+function BoxStatCells({
+  columns,
+  values
+}: {
+  columns: StatColumn[];
+  values: (column: StatColumn) => number;
+}) {
+  return (
+    <div className="box-stats">
+      {columns.map((column) => (
+        <span key={column.key} className="box-stat" title={column.label}>
+          <span className="box-stat-label">{column.short}</span>
+          {formatBoxStat(values(column))}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function BoxRow({
@@ -53,9 +77,7 @@ function BoxRow({
     <>
       <span className="box-num">{player.number ? `#${player.number}` : "—"}</span>
       <span className="box-name">{player.name}</span>
-      {columns.map((column) => (
-        <span key={column.key}>{readStat(player, column.key)}</span>
-      ))}
+      <BoxStatCells columns={columns} values={(column) => readStat(player, column.key)} />
     </>
   );
 
@@ -103,6 +125,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
   const playerBySourceId = new Map(
     players.filter((player) => player.sourceId).map((player) => [player.sourceId as string, player])
   );
+  const boxTableStyle = { "--box-stat-cols": columns.length } as CSSProperties;
 
   return (
     <aside className="detail-panel">
@@ -152,14 +175,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
             <h3>
               <TeamLogo name={side.name} src={side.logoUrl} className="team-logo-sm" /> {side.name}
             </h3>
-            <div className="box-table">
-              <div className="box-row box-head">
-                <span className="box-num">#</span>
-                <span className="box-name">Player</span>
-                {columns.map((column) => (
-                  <span key={column.key}>{column.short}</span>
-                ))}
-              </div>
+            <div className="box-table" style={boxTableStyle}>
               {side.players.map((player) => (
                 <BoxRow
                   key={player.sourceId}
@@ -172,9 +188,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
               <div className="box-row box-total">
                 <span className="box-num" />
                 <span className="box-name">Team</span>
-                {columns.map((column) => (
-                  <span key={column.key}>{totals[column.key]}</span>
-                ))}
+                <BoxStatCells columns={columns} values={(column) => totals[column.key] ?? 0} />
               </div>
             </div>
           </section>
