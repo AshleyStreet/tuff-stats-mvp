@@ -1,4 +1,37 @@
-import type { GameDetail, PlayerGameLog, PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
+import type { GameDetail, LeagueRef, PlayerGameLog, PlayerProfile, PlayersResponse, ScheduleResponse, SeasonInfo } from "./types";
+import type { PublicLeague } from "./league/types";
+
+let leagueCache: PublicLeague | null = null;
+let leagueInflight: Promise<PublicLeague> | null = null;
+
+function tenantKey() {
+  return leagueCache?.slug ?? "tuff";
+}
+
+function cacheKey(...parts: Array<string | number>) {
+  return [tenantKey(), ...parts.map(String)].join(":");
+}
+
+export async function getLeague() {
+  if (leagueCache) return leagueCache;
+  if (leagueInflight) return leagueInflight;
+
+  const request = (async () => {
+    const response = await fetch("/api/league");
+    if (!response.ok) {
+      throw new Error("Could not load league");
+    }
+    const data = (await response.json()) as PublicLeague;
+    if (!data?.slug) throw new Error("Could not load league");
+    leagueCache = data;
+    return data;
+  })().finally(() => {
+    leagueInflight = null;
+  });
+
+  leagueInflight = request;
+  return request;
+}
 
 const profileCache = new Map<string, PlayerProfile>();
 const profileInflight = new Map<string, Promise<PlayerProfile>>();
@@ -13,11 +46,11 @@ export async function getSeasons() {
     const error = await response.json().catch(() => null);
     throw new Error(error?.detail ?? "Could not load seasons");
   }
-  return response.json() as Promise<{ seasons: SeasonInfo[]; defaultSeason: string }>;
+  return response.json() as Promise<{ seasons: SeasonInfo[]; defaultSeason: string; league?: LeagueRef }>;
 }
 
 export async function getPlayers(season = "", options: { bypassCache?: boolean } = {}) {
-  const key = season || "default";
+  const key = cacheKey("players", season || "default");
   if (options.bypassCache) {
     seasonPlayersCache.delete(key);
   } else {
@@ -48,11 +81,11 @@ export async function getPlayers(season = "", options: { bypassCache?: boolean }
 }
 
 export function peekSeasonPlayers(season = "") {
-  return seasonPlayersCache.get(season || "default") ?? null;
+  return seasonPlayersCache.get(cacheKey("players", season || "default")) ?? null;
 }
 
 export async function getSchedule(season = "") {
-  const key = season || "default";
+  const key = cacheKey("schedule", season || "default");
   const cached = scheduleCache.get(key);
   if (cached) return cached;
 
@@ -82,7 +115,7 @@ const gameCache = new Map<string, GameDetail>();
 const gameInflight = new Map<string, Promise<GameDetail>>();
 
 export async function getGame(id: number, season = "") {
-  const key = `${season || "default"}:${id}`;
+  const key = cacheKey("game", season || "default", id);
   const cached = gameCache.get(key);
   if (cached) return cached;
 
@@ -112,7 +145,7 @@ const gameLogCache = new Map<string, PlayerGameLog>();
 const gameLogInflight = new Map<string, Promise<PlayerGameLog>>();
 
 export async function getPlayerGameLog(playerId: string, season = "") {
-  const key = `${playerId}:${season || "default"}`;
+  const key = cacheKey("log", playerId, season || "default");
   const cached = gameLogCache.get(key);
   if (cached) return cached;
 
@@ -139,14 +172,14 @@ export async function getPlayerGameLog(playerId: string, season = "") {
 }
 
 export function peekPlayerProfile(playerId: string) {
-  return profileCache.get(playerId) ?? null;
+  return profileCache.get(cacheKey("profile", playerId)) ?? null;
 }
 
 export async function getPlayerProfile(playerId: string) {
-  const cached = profileCache.get(playerId);
+  const cached = profileCache.get(cacheKey("profile", playerId));
   if (cached) return cached;
 
-  const pending = profileInflight.get(playerId);
+  const pending = profileInflight.get(cacheKey("profile", playerId));
   if (pending) return pending;
 
   const request = (async () => {
@@ -156,13 +189,13 @@ export async function getPlayerProfile(playerId: string) {
       throw new Error(error?.detail ?? error?.error ?? "Could not load player profile");
     }
     const profile = (await response.json()) as PlayerProfile;
-    profileCache.set(playerId, profile);
+    profileCache.set(cacheKey("profile", playerId), profile);
     return profile;
   })().finally(() => {
-    profileInflight.delete(playerId);
+    profileInflight.delete(cacheKey("profile", playerId));
   });
 
-  profileInflight.set(playerId, request);
+  profileInflight.set(cacheKey("profile", playerId), request);
   return request;
 }
 

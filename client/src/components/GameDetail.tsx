@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, X } from "lucide-react";
 import { getGame } from "../api";
+import { useLeague, usePresentation } from "../league/LeagueProvider";
+import { readStat } from "../league/readStat";
+import type { StatColumn } from "../league/types";
 import type { BoxScorePlayer, BoxScoreSide, GameDetail, Player, ScheduleGame } from "../types";
 import { TeamLogo } from "./TeamLogo";
 
@@ -11,15 +14,6 @@ interface Props {
   onClose: () => void;
   onSelectPlayer?: (player: Player) => void;
 }
-
-const columns = [
-  { key: "rec", label: "Rec" },
-  { key: "recTD", label: "RecTD" },
-  { key: "paTD", label: "PaTD" },
-  { key: "int", label: "INT" },
-  { key: "sack", label: "Sack" },
-  { key: "deflag", label: "DFL" }
-] as const;
 
 function formatGameWhen(iso: string) {
   const date = new Date(iso);
@@ -33,14 +27,12 @@ function formatGameWhen(iso: string) {
   });
 }
 
-function sumSide(side: BoxScoreSide) {
-  const totals = Object.fromEntries(columns.map((column) => [column.key, 0])) as Record<
-    (typeof columns)[number]["key"],
-    number
-  >;
+function sumSide(side: BoxScoreSide, columns: StatColumn[]) {
+  const totals: Record<string, number> = {};
+  for (const column of columns) totals[column.key] = 0;
   for (const player of side.players) {
     for (const column of columns) {
-      totals[column.key] += player.stats[column.key];
+      totals[column.key] += readStat(player, column.key);
     }
   }
   return totals;
@@ -48,10 +40,12 @@ function sumSide(side: BoxScoreSide) {
 
 function BoxRow({
   player,
+  columns,
   match,
   onSelect
 }: {
   player: BoxScorePlayer;
+  columns: StatColumn[];
   match?: Player;
   onSelect?: (player: Player) => void;
 }) {
@@ -60,7 +54,7 @@ function BoxRow({
       <span className="box-num">{player.number ? `#${player.number}` : "—"}</span>
       <span className="box-name">{player.name}</span>
       {columns.map((column) => (
-        <span key={column.key}>{player.stats[column.key]}</span>
+        <span key={column.key}>{readStat(player, column.key)}</span>
       ))}
     </>
   );
@@ -77,6 +71,8 @@ function BoxRow({
 }
 
 export function GameDetail({ game, season, players, onClose, onSelectPlayer }: Props) {
+  const league = useLeague();
+  const columns = usePresentation().boxScoreColumns;
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +146,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
 
       {sides.map((side) => {
         if (!side.players.length) return null;
-        const totals = sumSide(side);
+        const totals = sumSide(side, columns);
         return (
           <section key={side.id}>
             <h3>
@@ -161,13 +157,14 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
                 <span className="box-num">#</span>
                 <span className="box-name">Player</span>
                 {columns.map((column) => (
-                  <span key={column.key}>{column.label}</span>
+                  <span key={column.key}>{column.short}</span>
                 ))}
               </div>
               {side.players.map((player) => (
                 <BoxRow
                   key={player.sourceId}
                   player={player}
+                  columns={columns}
                   match={playerBySourceId.get(player.sourceId)}
                   onSelect={onSelectPlayer}
                 />
@@ -186,7 +183,7 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
 
       {(detail?.game.link || game.link) && (
         <a className="source-link" href={detail?.game.link ?? game.link} target="_blank" rel="noreferrer">
-          Open original TUFF recap <ExternalLink size={15} />
+          {league.copy.recapLinkLabel} <ExternalLink size={15} />
         </a>
       )}
     </aside>

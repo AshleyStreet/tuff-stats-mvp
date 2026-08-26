@@ -1,9 +1,10 @@
-import type { Player, StatKey } from "../types";
+import { readStat } from "../league/readStat";
+import type { Player } from "../types";
 
 export type PlayerQuery = {
   search?: string;
   team?: string;
-  sort?: StatKey | "totalPoints";
+  sort?: string;
   order?: "asc" | "desc";
 };
 
@@ -22,8 +23,8 @@ export function filterAndSortPlayers(players: Player[], query: PlayerQuery = {})
   }
 
   result.sort((a, b) => {
-    const aValue = sort === "totalPoints" ? a.derived.totalPoints : a.stats[sort] ?? 0;
-    const bValue = sort === "totalPoints" ? b.derived.totalPoints : b.stats[sort] ?? 0;
+    const aValue = readStat(a, sort);
+    const bValue = readStat(b, sort);
     return (aValue - bValue) * order || a.name.localeCompare(b.name);
   });
 

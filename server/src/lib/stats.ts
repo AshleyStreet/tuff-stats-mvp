@@ -1,5 +1,11 @@
+/**
+ * Maps SportsPress / HTML flag-football abbreviations onto the domain Stats record.
+ * Source-specific column names (att, rectd, paonept, …) stay here — not in React.
+ */
 import * as cheerio from "cheerio";
-import type { Player, StatKey, Stats } from "../types.js";
+import { tuffLeague } from "../leagues/tuff.js";
+import type { LeagueSourceConfig } from "../leagues/types.js";
+import { statKeys, type Player, type StatKey, type Stats } from "../domain/types.js";
 
 export const headerMap: Record<string, StatKey> = {
   gms: "gms",
@@ -37,31 +43,36 @@ export const headerMap: Record<string, StatKey> = {
   ret2pt: "ret2PT",
   rettwopt: "ret2PT",
   safety: "safety",
-  sty: "safety"
+  sty: "safety",
+  ab: "ab",
+  r: "r",
+  runs: "r",
+  h: "h",
+  hits: "h",
+  "2b": "doubles",
+  doubles: "doubles",
+  "3b": "triples",
+  triples: "triples",
+  hr: "hr",
+  rbi: "rbi",
+  bb: "bb",
+  so: "so",
+  k: "so",
+  sb: "sb",
+  appearances: "gms",
+  goals: "goals",
+  buts: "goals",
+  yellowcards: "yellowCards",
+  cartonsjaunes: "yellowCards",
+  redcards: "redCards",
+  cartonsrouges: "redCards"
 };
 
-export const emptyStats = (): Stats => ({
-  gms: 0,
-  tpqb: 0,
-  tpnqb: 0,
-  paTD: 0,
-  ruTD: 0,
-  recTD: 0,
-  retTD: 0,
-  comp: 0,
-  int: 0,
-  sack: 0,
-  deflag: 0,
-  pa1PT: 0,
-  ru1PT: 0,
-  re1PT: 0,
-  pa2PT: 0,
-  rec: 0,
-  ru2PT: 0,
-  re2PT: 0,
-  ret2PT: 0,
-  safety: 0
-});
+export const emptyStats = (): Stats => {
+  const stats = {} as Stats;
+  for (const key of statKeys) stats[key] = 0;
+  return stats;
+};
 
 export const toNumber = (value: unknown) => {
   const parsed = Number.parseFloat(String(value ?? "0").replace(/[^0-9.-]/g, ""));
@@ -87,11 +98,20 @@ export function chunk<T>(items: T[], size: number) {
   return groups;
 }
 
-export function isStatsList(list: { slug: string; title?: { rendered?: string } }) {
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function isStatsList(
+  list: { slug: string; title?: { rendered?: string } },
+  source: LeagueSourceConfig = tuffLeague.source
+) {
   const slug = list.slug.toLowerCase();
   const title = (list.title?.rendered ?? "").toLowerCase();
-  if (slug === "tuff-stats-old") return false;
-  return /(tuff|tgfl)-stats$/.test(slug) || /\b(tuff|tgfl)\s+stats\b/.test(title);
+  if (source.excludeStatsSlugs.some((item) => item.toLowerCase() === slug)) return false;
+  const tokenAlt = source.statsListTokens.map(escapeRegExp).join("|");
+  if (!tokenAlt) return false;
+  return new RegExp(`(${tokenAlt})-stats$`).test(slug) || new RegExp(`\\b(${tokenAlt})\\s+stats\\b`).test(title);
 }
 
 export function yearFromStatsList(list: { slug: string; title?: { rendered?: string } }): string | null {
@@ -147,21 +167,7 @@ export function buildPlayer(
   };
 }
 
-export const FRANCHISE_TEAM_NAMES = [
-  "Brawlers",
-  "Bulldogs",
-  "Cobras",
-  "Knights",
-  "Lumberjacks",
-  "Menace",
-  "Rhinos",
-  "Sirens",
-  "Stallions",
-  "Storm Crows",
-  "Wildcats",
-  "Wolfhounds",
-  "Yetis"
-];
+export const FRANCHISE_TEAM_NAMES = tuffLeague.source.franchiseTeamNames;
 
 export function uniqueTeamAliases(...groups: Array<Iterable<string>>): string[] {
   const seen = new Set<string>();

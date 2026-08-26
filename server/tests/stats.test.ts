@@ -1,3 +1,4 @@
+import { tuffLeague } from "../src/leagues/tuff.js";
 import {
   buildPlayer,
   canonicalTeamName,
@@ -61,6 +62,17 @@ describe("isStatsList", () => {
     expect(isStatsList({ slug: "2025-sirens" })).toBe(false);
     expect(isStatsList({ slug: "tuff-stats-old" })).toBe(false);
   });
+
+  it("uses source config tokens when provided", () => {
+    const source = {
+      ...tuffLeague.source,
+      statsListTokens: ["demo"],
+      excludeStatsSlugs: ["demo-stats-old"]
+    };
+    expect(isStatsList({ slug: "2026-demo-stats" }, source)).toBe(true);
+    expect(isStatsList({ slug: "2026-tuff-stats" }, source)).toBe(false);
+    expect(isStatsList({ slug: "demo-stats-old" }, source)).toBe(false);
+  });
 });
 
 describe("yearFromStatsList", () => {
@@ -103,6 +115,31 @@ describe("statsFromRow", () => {
   it("starts from empty stats for missing fields", () => {
     expect(statsFromRow({}).gms).toBe(0);
     expect(emptyStats().recTD).toBe(0);
+    expect(emptyStats().hr).toBe(0);
+  });
+
+  it("maps softball batting abbreviations", () => {
+    expect(statsFromRow({ ab: "12", r: "3", h: "5", hr: "1", rbi: "4", bb: "2", so: "1", sb: "1" })).toMatchObject({
+      ab: 12,
+      r: 3,
+      h: 5,
+      hr: 1,
+      rbi: 4,
+      bb: 2,
+      so: 1,
+      sb: 1
+    });
+  });
+
+  it("maps soccer goal and card abbreviations", () => {
+    expect(
+      statsFromRow({ appearances: "9", buts: "13", cartonsjaunes: "1", cartonsrouges: "0" })
+    ).toMatchObject({
+      gms: 9,
+      goals: 13,
+      yellowCards: 1,
+      redCards: 0
+    });
   });
 });
 

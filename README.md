@@ -90,6 +90,10 @@ npm start
 
 Then open http://localhost:4000
 
+## Host on Lightsail
+
+Use a Lightsail instance plus `https://stats.playtuff.ca` if you do not want an `.onrender.com` URL. Step-by-step: [deploy/lightsail/README.md](deploy/lightsail/README.md).
+
 Season selector covers available TUFF/TGFL stats lists (currently 2019–2026). Teams for each season come from that year’s roster lists.
 
 ## Production note

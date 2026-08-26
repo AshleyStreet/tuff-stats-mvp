@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ExternalLink, Printer, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
 import { toTradingCard, type TradingCardData } from "../lib/cards";
+import { useLeague, usePresentation } from "../league/LeagueProvider";
+import { readStat } from "../league/readStat";
 import { teamLogoUrl } from "../lib/teams";
 import type { Player, PlayerGameLog, PlayerProfile, ScheduleGame, SeasonAppearance } from "../types";
 import { CareerChart } from "./CareerChart";
+import { KpiRow } from "./StatGrid";
 import { TeamLogo } from "./TeamLogo";
 
 interface Props {
@@ -16,6 +19,12 @@ interface Props {
   onSelectGame?: (game: ScheduleGame) => void;
   onPrintCard?: (card: TradingCardData) => void;
 }
+
+const groupIcons = {
+  zap: Zap,
+  shield: Shield,
+  trophy: Trophy
+} as const;
 
 const Row = ({ label, value }: { label: string; value: number }) => (
   <div className="detail-row"><span>{label}</span><strong>{value}</strong></div>
@@ -40,6 +49,8 @@ function formatResult(outcome?: string, score?: number, oppScore?: number) {
 }
 
 export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame, onPrintCard }: Props) {
+  const league = useLeague();
+  const presentation = usePresentation();
   const cached = peekPlayerProfile(player.id);
   const [profile, setProfile] = useState<PlayerProfile | null>(cached);
   const [loading, setLoading] = useState(!cached);
@@ -158,8 +169,8 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
           <p>
             {teamLabel ? `${teamLabel} · ` : ""}
             {career
-              ? `${career.seasonsPlayed} season${career.seasonsPlayed === 1 ? "" : "s"} · ${career.derived.totalPoints} career pts`
-              : `${player.stats.gms} games · ${player.derived.totalPoints} pts`}
+              ? `${career.seasonsPlayed} season${career.seasonsPlayed === 1 ? "" : "s"} · ${readStat(career, "totalPoints")} career pts`
+              : `${readStat(player, "gms")} games · ${readStat(player, "totalPoints")} pts`}
           </p>
           {onPrintCard && seasonView && (
             <button
@@ -186,21 +197,9 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
       {loading && <div className="profile-loading">Loading career…</div>}
       {error && <div className="profile-error">{error}</div>}
 
-      {career && (
-        <div className="hero-kpis">
-          <div><span>CAREER PTS</span><strong>{career.derived.totalPoints}</strong></div>
-          <div><span>CAREER TD</span><strong>{career.derived.totalTouchdowns}</strong></div>
-          <div><span>GAMES</span><strong>{career.stats.gms}</strong></div>
-        </div>
-      )}
+      {career && <KpiRow columns={presentation.careerKpis} source={career} />}
 
-      {!career && !loading && (
-        <div className="hero-kpis">
-          <div><span>RECEPTIONS</span><strong>{player.stats.rec}</strong></div>
-          <div><span>REC TD</span><strong>{player.stats.recTD}</strong></div>
-          <div><span>INT</span><strong>{player.stats.int}</strong></div>
-        </div>
-      )}
+      {!career && !loading && <KpiRow columns={presentation.heroKpis} source={player} />}
 
       {profile && profile.seasons.length > 1 && (
         <CareerChart seasons={profile.seasons} selectedSeason={selectedSeason} />
@@ -230,7 +229,10 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
           )}
           <div className="season-table">
             <div className="season-table-head">
-              <span>Year</span><span>Team</span><span>G</span><span>Pts</span><span>TD</span>
+              <span>Year</span><span>Team</span>
+              {presentation.seasonTableColumns.map((column) => (
+                <span key={column.key}>{column.short}</span>
+              ))}
             </div>
             {profile.seasons.map((row) => (
               <button
@@ -243,9 +245,9 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
               >
                 <span>{row.season}{row.linked ? "*" : ""}</span>
                 <span>{row.team ?? "—"}</span>
-                <span>{row.stats.gms}</span>
-                <span>{row.derived.totalPoints}</span>
-                <span>{row.derived.totalTouchdowns}</span>
+                {presentation.seasonTableColumns.map((column) => (
+                  <span key={column.key}>{readStat(row, column.key)}</span>
+                ))}
               </button>
             ))}
           </div>
@@ -255,11 +257,7 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
       {seasonView && (
         <>
           <div className="season-detail-label">{seasonView.season} season detail</div>
-          <div className="hero-kpis compact">
-            <div><span>REC</span><strong>{seasonView.stats.rec}</strong></div>
-            <div><span>REC TD</span><strong>{seasonView.stats.recTD}</strong></div>
-            <div><span>INT</span><strong>{seasonView.stats.int}</strong></div>
-          </div>
+          <KpiRow columns={presentation.heroKpis} source={seasonView} compact />
 
           <section>
             <h3><CalendarDays size={17} /> Game log</h3>
@@ -274,12 +272,9 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                   <span>Date</span>
                   <span>Opp</span>
                   <span>Res</span>
-                  <span>Rec</span>
-                  <span>RecTD</span>
-                  <span>PaTD</span>
-                  <span>INT</span>
-                  <span>Sack</span>
-                  <span>DFL</span>
+                  {presentation.gameLogColumns.map((column) => (
+                    <span key={column.key}>{column.short}</span>
+                  ))}
                 </div>
                 {gameLog.games.map((row) => {
                   const cells = (
@@ -289,12 +284,9 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                       <span className={row.outcome === "win" ? "winner-score" : ""}>
                         {formatResult(row.outcome, row.score, row.oppScore)}
                       </span>
-                      <span>{row.stats.rec}</span>
-                      <span>{row.stats.recTD}</span>
-                      <span>{row.stats.paTD}</span>
-                      <span>{row.stats.int}</span>
-                      <span>{row.stats.sack}</span>
-                      <span>{row.stats.deflag}</span>
+                      {presentation.gameLogColumns.map((column) => (
+                        <span key={column.key}>{readStat(row, column.key)}</span>
+                      ))}
                     </>
                   );
                   if (onSelectGame) {
@@ -319,40 +311,23 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
             )}
           </section>
 
-          <section>
-            <h3><Zap size={17} /> Offense</h3>
-            <Row label="Passing TDs" value={seasonView.stats.paTD} />
-            <Row label="Rushing TDs" value={seasonView.stats.ruTD} />
-            <Row label="Receiving TDs" value={seasonView.stats.recTD} />
-            <Row label="Return TDs" value={seasonView.stats.retTD} />
-            <Row label="Completions" value={seasonView.stats.comp} />
-            <Row label="Receptions" value={seasonView.stats.rec} />
-          </section>
-
-          <section>
-            <h3><Shield size={17} /> Defense</h3>
-            <Row label="Interceptions" value={seasonView.stats.int} />
-            <Row label="Deflags" value={seasonView.stats.deflag} />
-            <Row label="Sacks" value={seasonView.stats.sack} />
-            <Row label="Safeties" value={seasonView.stats.safety} />
-          </section>
-
-          <section>
-            <h3><Trophy size={17} /> Conversions</h3>
-            <Row label="1PT Passing" value={seasonView.stats.pa1PT} />
-            <Row label="1PT Rushing" value={seasonView.stats.ru1PT} />
-            <Row label="1PT Receiving" value={seasonView.stats.re1PT} />
-            <Row label="2PT Passing" value={seasonView.stats.pa2PT} />
-            <Row label="2PT Rushing" value={seasonView.stats.ru2PT} />
-            <Row label="2PT Receiving" value={seasonView.stats.re2PT} />
-            <Row label="2PT Return" value={seasonView.stats.ret2PT} />
-          </section>
+          {presentation.detailGroups.map((group) => {
+            const Icon = groupIcons[group.icon ?? "trophy"];
+            return (
+              <section key={group.id}>
+                <h3><Icon size={17} /> {group.title}</h3>
+                {group.columns.map((column) => (
+                  <Row key={column.key} label={column.label} value={readStat(seasonView, column.key)} />
+                ))}
+              </section>
+            );
+          })}
         </>
       )}
 
       {(profile?.profileUrl || player.profileUrl) && (
         <a className="source-link" href={profile?.profileUrl ?? player.profileUrl} target="_blank" rel="noreferrer">
-          Open original TUFF profile <ExternalLink size={15} />
+          {league.copy.profileLinkLabel} <ExternalLink size={15} />
         </a>
       )}
     </aside>
