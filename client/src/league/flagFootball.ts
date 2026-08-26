@@ -10,8 +10,8 @@ const paTD = { key: "paTD", label: "Passing TDs", short: "PaTD" };
 /** Baked fallback — keep in sync with server/src/leagues/sports/flag-football.ts */
 export const flagFootballPresentation: StatPresentation = {
   sortOptions: [
-    { key: "totalPoints", label: "Total Points", short: "PTS" },
     { key: "tpnqb", label: "Non-QB Points", short: "NQ" },
+    { key: "totalPoints", label: "Total Points", short: "PTS" },
     recTD,
     rec,
     int,

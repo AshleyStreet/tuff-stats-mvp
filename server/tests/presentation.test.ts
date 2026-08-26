@@ -11,8 +11,8 @@ describe("flag-football presentation schema", () => {
 
   it("keeps the current TUFF sort keys and labels", () => {
     expect(schema.sortOptions.map((column) => column.key)).toEqual([
-      "totalPoints",
       "tpnqb",
+      "totalPoints",
       "recTD",
       "rec",
       "int",
@@ -21,7 +21,7 @@ describe("flag-football presentation schema", () => {
       "paTD",
       "gms"
     ]);
-    expect(schema.sortOptions[0]?.label).toBe("Total Points");
+    expect(schema.sortOptions[0]?.label).toBe("Non-QB Points");
     expect(schema.sortOptions.find((column) => column.key === "tpnqb")?.label).toBe("Non-QB Points");
     expect(schema.sortOptions.find((column) => column.key === "deflag")?.label).toBe("Deflags");
   });
@@ -60,7 +60,7 @@ describe("public league presentation", () => {
     expect(tuffLeague.sportIcon).toBe("football");
     expect(pub.sportIcon).toBe("football");
     expect(pub.presentation).toBe(flagFootballPresentation);
-    expect(pub.presentation.sortOptions[0]?.key).toBe("totalPoints");
+    expect(pub.presentation.sortOptions[0]?.key).toBe("tpnqb");
     expect(pub).not.toHaveProperty("source");
     expect(pub).not.toHaveProperty("adapter");
   });

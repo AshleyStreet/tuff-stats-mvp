@@ -10,8 +10,8 @@ const paTD = { key: "paTD", label: "Passing TDs", short: "PaTD" };
 /** TUFF / flag-football layout — matches the current board, profile, box score, and cards. */
 export const flagFootballPresentation: StatPresentation = {
   sortOptions: [
-    { key: "totalPoints", label: "Total Points", short: "PTS" },
     { key: "tpnqb", label: "Non-QB Points", short: "NQ" },
+    { key: "totalPoints", label: "Total Points", short: "PTS" },
     recTD,
     rec,
     int,
