@@ -88,6 +88,8 @@ export type SourceProbeResult = {
   publicSeason: string;
   hostnames: string[];
   franchiseTeamNames: string[];
+  /** Present when probe built a SportsPress ingest config; opaque to the client. */
+  source?: Record<string, unknown>;
   seasons: Array<{ key: string; label: string }>;
   tables: string[];
   lists: string[];
