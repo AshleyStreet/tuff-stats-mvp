@@ -16,6 +16,7 @@ import { TradingCard } from "./components/TradingCard";
 import { toTradingCard } from "./lib/cards";
 import { filterAndSortPlayers } from "./lib/query";
 import { trackDrawerClose, trackEvent, trackFilter, trackPageView } from "./lib/analytics";
+import { leagueTabSeo, setPageSeo } from "./lib/seo";
 import { useDebouncedSearchTrack } from "./lib/useDebouncedSearchTrack";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
@@ -56,8 +57,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const seo = leagueTabSeo(league, tab, season);
+    setPageSeo(seo);
     trackPageView(`/${tab}`, `${league.name} · ${tab}`);
-  }, [tab, league.name, league.slug, season]);
+  }, [tab, league.name, league.slug, league.shortName, season]);
 
   useEffect(() => {
     const next = presentation.sortOptions[0]?.key;
