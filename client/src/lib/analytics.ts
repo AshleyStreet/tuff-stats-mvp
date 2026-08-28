@@ -16,6 +16,24 @@ declare global {
 
 let initialized = false;
 
+function ensureGtag(gaId: string) {
+  window.dataLayer = window.dataLayer || [];
+  window.gtag =
+    window.gtag ||
+    function gtag(...args: unknown[]) {
+      window.dataLayer!.push(args);
+    };
+  window.gtag("js", new Date());
+  window.gtag("config", gaId, { send_page_view: false });
+}
+
+function sendGtag(...args: unknown[]) {
+  if (!analyticsAllowed()) return;
+  const { gaId } = readConfig();
+  if (gaId) ensureGtag(gaId);
+  window.gtag?.(...args);
+}
+
 function readConfig(): AnalyticsConfig {
   return {
     gaId: import.meta.env.VITE_GA_MEASUREMENT_ID?.trim() || undefined,
@@ -44,16 +62,11 @@ export function initAnalytics() {
   const { gaId, plausibleDomain, plausibleSrc } = readConfig();
 
   if (gaId) {
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function gtag(...args: unknown[]) {
-      window.dataLayer!.push(args);
-    };
+    ensureGtag(gaId);
     const script = document.createElement("script");
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
     document.head.appendChild(script);
-    window.gtag("js", new Date());
-    window.gtag("config", gaId, { send_page_view: false });
   }
 
   if (plausibleDomain) {
@@ -72,13 +85,11 @@ export function trackPageView(path: string, title?: string) {
   const pageTitle = title ?? document.title;
   const pageLocation = `${window.location.origin}${pagePath}${window.location.search}`;
 
-  if (window.gtag) {
-    window.gtag("event", "page_view", {
-      page_path: pagePath,
-      page_title: pageTitle,
-      page_location: pageLocation
-    });
-  }
+  sendGtag("event", "page_view", {
+    page_path: pagePath,
+    page_title: pageTitle,
+    page_location: pageLocation
+  });
 
   if (window.plausible) {
     window.plausible("pageview");
@@ -88,9 +99,7 @@ export function trackPageView(path: string, title?: string) {
 export function trackEvent(name: string, params: AnalyticsProps = {}) {
   if (!analyticsAllowed()) return;
 
-  if (window.gtag) {
-    window.gtag("event", name, params);
-  }
+  sendGtag("event", name, params);
 
   if (window.plausible) {
     const props = Object.fromEntries(
