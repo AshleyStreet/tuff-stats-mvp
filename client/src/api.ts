@@ -78,13 +78,17 @@ export async function getSeasons() {
   return data;
 }
 
+function playersCacheReady(data: PlayersResponse) {
+  return Boolean(data.meta.teamLogos && Object.keys(data.meta.teamLogos).length);
+}
+
 export async function getPlayers(season = "", options: { bypassCache?: boolean } = {}) {
   const key = cacheKey("players", season || "default");
   if (options.bypassCache) {
     seasonPlayersCache.delete(key);
   } else {
     const cached = seasonPlayersCache.get(key);
-    if (cached) return cached;
+    if (cached && playersCacheReady(cached)) return cached;
   }
 
   const pending = seasonPlayersInflight.get(key);
