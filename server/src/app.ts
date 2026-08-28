@@ -249,6 +249,15 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
   if (fs.existsSync(clientDist)) {
     const indexPath = path.join(clientDist, "index.html");
     const indexTemplate = fs.readFileSync(indexPath, "utf8");
+    const googleSiteVerification = "google-site-verification: googleef181a2027facb7d.html";
+
+    app.get("/googleef181a2027facb7d.html", (_req, res) => {
+      res.type("text/html").send(googleSiteVerification);
+    });
+    // GSC URL-prefix properties that include /sitemap.xml check this path.
+    app.get("/sitemap.xml/googleef181a2027facb7d.html", (_req, res) => {
+      res.type("text/html").send(googleSiteVerification);
+    });
 
     app.get("/robots.txt", (req, res) => {
       const origin = requestOrigin(req);
