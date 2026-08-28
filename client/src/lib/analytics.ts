@@ -9,30 +9,16 @@ type AnalyticsConfig = {
 declare global {
   interface Window {
     dataLayer?: unknown[];
-    gtag?: (...args: unknown[]) => void;
+    gtag?: Gtag;
+    __gtagReady?: Promise<void>;
     plausible?: (event: string, options?: { props?: Record<string, string> }) => void;
   }
 }
 
+type Gtag = (...args: unknown[]) => void;
+
 let initialized = false;
-
-function ensureGtag(gaId: string) {
-  window.dataLayer = window.dataLayer || [];
-  window.gtag =
-    window.gtag ||
-    function gtag(...args: unknown[]) {
-      window.dataLayer!.push(args);
-    };
-  window.gtag("js", new Date());
-  window.gtag("config", gaId, { send_page_view: false });
-}
-
-function sendGtag(...args: unknown[]) {
-  if (!analyticsAllowed()) return;
-  const { gaId } = readConfig();
-  if (gaId) ensureGtag(gaId);
-  window.gtag?.(...args);
-}
+let gtagReady: Promise<void> | null = null;
 
 function readConfig(): AnalyticsConfig {
   return {
@@ -55,6 +41,56 @@ function analyticsAllowed() {
   return true;
 }
 
+/** Match Google's snippet — gtag.js only replays `arguments` objects, not spread arrays. */
+function ensureGtagStub() {
+  window.dataLayer = window.dataLayer || [];
+  if (window.gtag) return;
+  window.gtag = function gtag() {
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer!.push(arguments);
+  } as Gtag;
+}
+
+function waitForGtag(gaId: string) {
+  if (gtagReady) return gtagReady;
+  ensureGtagStub();
+
+  gtagReady =
+    window.__gtagReady ??
+    new Promise((resolve) => {
+      const selector = `script[src*="gtag/js?id=${encodeURIComponent(gaId)}"]`;
+      const existing = document.querySelector<HTMLScriptElement>(selector);
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
+      script.onload = () => resolve();
+      script.onerror = () => resolve();
+      document.head.appendChild(script);
+    });
+
+  return gtagReady;
+}
+
+function configureGtag(gaId: string) {
+  ensureGtagStub();
+  window.gtag!("js", new Date());
+  window.gtag!("config", gaId, { send_page_view: false });
+}
+
+async function sendGtag(...args: unknown[]) {
+  if (!analyticsAllowed()) return;
+  const { gaId } = readConfig();
+  if (!gaId) return;
+  configureGtag(gaId);
+  await waitForGtag(gaId);
+  window.gtag?.(...args);
+}
+
 export function initAnalytics() {
   if (initialized || !analyticsAllowed()) return;
   initialized = true;
@@ -62,11 +98,8 @@ export function initAnalytics() {
   const { gaId, plausibleDomain, plausibleSrc } = readConfig();
 
   if (gaId) {
-    ensureGtag(gaId);
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
-    document.head.appendChild(script);
+    configureGtag(gaId);
+    void waitForGtag(gaId);
   }
 
   if (plausibleDomain) {
@@ -85,7 +118,7 @@ export function trackPageView(path: string, title?: string) {
   const pageTitle = title ?? document.title;
   const pageLocation = `${window.location.origin}${pagePath}${window.location.search}`;
 
-  sendGtag("event", "page_view", {
+  void sendGtag("event", "page_view", {
     page_path: pagePath,
     page_title: pageTitle,
     page_location: pageLocation
@@ -99,7 +132,7 @@ export function trackPageView(path: string, title?: string) {
 export function trackEvent(name: string, params: AnalyticsProps = {}) {
   if (!analyticsAllowed()) return;
 
-  sendGtag("event", name, params);
+  void sendGtag("event", name, params);
 
   if (window.plausible) {
     const props = Object.fromEntries(
