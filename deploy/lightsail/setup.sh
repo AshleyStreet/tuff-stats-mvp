@@ -36,10 +36,10 @@ if [[ ! -f deploy/lightsail/.env ]]; then
   echo "Created deploy/lightsail/.env — set ADMIN_TOKEN (and later DOMAIN) before going public."
 fi
 
-docker compose up -d --build
+docker compose --env-file deploy/lightsail/.env up -d --build
 
 echo
 echo "TUFF Stats is starting behind Caddy."
 echo "  curl -sS http://127.0.0.1/api/health"
 echo "Until DNS is set, use http://<static-ip>/  (no .onrender.com)."
-echo "Then uncomment DOMAIN=stats.playtuff.ca in deploy/lightsail/.env and: docker compose up -d"
+echo "Then uncomment DOMAIN=stats.playtuff.ca in deploy/lightsail/.env and: docker compose --env-file deploy/lightsail/.env up -d"

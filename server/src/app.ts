@@ -10,6 +10,8 @@ import { AdminError, createAdminTenant, listAdminTenants, probeAdminSourceUrl, u
 import { resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
+import { isMarketingHost } from "./lib/marketingHosts.js";
+import { injectPageBootstrap } from "./lib/pageBootstrap.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -236,11 +238,35 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
   });
 
   if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
+    const indexPath = path.join(clientDist, "index.html");
+    const indexTemplate = fs.readFileSync(indexPath, "utf8");
+
+    app.use(express.static(clientDist, { index: false }));
+
+    async function sendSpa(req: express.Request, res: express.Response) {
+      const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
+      if (isMarketingHost(host)) {
+        return res.type("html").send(indexTemplate);
+      }
+
+      try {
+        const { league, adapter } = tenant(req);
+        const html = await buildBootstrappedHtml(indexTemplate, league, adapter);
+        return res.type("html").send(html);
+      } catch {
+        return res.type("html").send(indexTemplate);
+      }
+    }
+
+    app.get("/", (req, res) => {
+      void sendSpa(req, res);
+    });
+
     app.use((req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.startsWith("/api")) return next();
-      return res.sendFile(path.join(clientDist, "index.html"));
+      if (req.path.includes(".")) return next();
+      void sendSpa(req, res);
     });
   }
 
@@ -253,4 +279,18 @@ function sendAdminError(res: express.Response, error: unknown) {
   }
   const message = error instanceof Error ? error.message : "Unknown error";
   return res.status(500).json({ error: message });
+}
+
+async function buildBootstrappedHtml(indexTemplate: string, league: League, adapter: LeagueDataAdapter) {
+  const seasons = await adapter.getSeasons();
+  const publicSeason = league.publicSeason;
+  const defaultSeason = seasons.some((item) => item.year === publicSeason)
+    ? publicSeason
+    : (seasons[0]?.year ?? publicSeason);
+  const players = await adapter.getPlayers({ season: defaultSeason });
+  return injectPageBootstrap(indexTemplate, {
+    league: toPublicLeague(league),
+    seasons: { seasons, defaultSeason },
+    players
+  });
 }

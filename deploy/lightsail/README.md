@@ -86,7 +86,8 @@ curl -X POST http://127.0.0.1/api/admin/refresh \
 ```bash
 cd /opt/tuff-stats
 git pull --ff-only origin main
-docker compose up -d --build
+docker compose --env-file deploy/lightsail/.env build --no-cache app
+docker compose --env-file deploy/lightsail/.env up -d
 ```
 
 Or run **Deploy Lightsail** from GitHub Actions (`workflow_dispatch`) after adding repository secrets `LIGHTSAIL_HOST` (static IP or `stats.playtuff.ca`), `LIGHTSAIL_USER` (`ubuntu`), and `LIGHTSAIL_SSH_KEY`.

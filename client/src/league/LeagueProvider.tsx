@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getLeague } from "../api";
+import { getLeague, peekLeague } from "../api";
 import { flagFootballPresentation } from "./flagFootball";
 import { tuffPublicLeague } from "./tuff";
 import type { PublicLeague, StatPresentation } from "./types";
@@ -45,10 +45,11 @@ export function LeaguePreviewProvider({
 }
 
 export function LeagueProvider({ children }: { children: ReactNode }) {
-  const [league, setLeague] = useState<PublicLeague>(tuffPublicLeague);
+  const [league, setLeague] = useState<PublicLeague>(() => peekLeague() ?? tuffPublicLeague);
 
   useEffect(() => {
-    applyLeagueBranding(tuffPublicLeague);
+    const initial = peekLeague() ?? tuffPublicLeague;
+    applyLeagueBranding(initial);
     let cancelled = false;
     getLeague()
       .then((data) => {

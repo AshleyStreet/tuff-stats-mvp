@@ -6,9 +6,11 @@ import { CaptainTools } from "./components/CaptainTools";
 import { MarketingHome } from "./components/MarketingHome";
 import { LeagueProvider } from "./league/LeagueProvider";
 import { isMarketingHost } from "./lib/marketingHost";
+import { applyPageBootstrap } from "./lib/bootstrap";
 import { initAnalytics, trackPageView } from "./lib/analytics";
 import "./styles.css";
 
+applyPageBootstrap();
 initAnalytics();
 
 function Root() {
