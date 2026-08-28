@@ -1,6 +1,8 @@
 import type { PublicLeague } from "../leagues/types.js";
 import { listLeagues } from "../leagues/registry.js";
 import { isMarketingHost } from "./marketingHosts.js";
+import type { PlayerProfile, ScheduleGame, TeamStanding } from "../domain/types.js";
+import { tabPath, type AppTab } from "./appRoutes.js";
 
 export type PageSeo = {
   title: string;
@@ -8,7 +10,7 @@ export type PageSeo = {
   canonical: string;
   image?: string;
   siteName?: string;
-  type?: "website" | "article";
+  type?: "website" | "article" | "profile";
 };
 
 export function escapeHtml(value: string) {
@@ -35,6 +37,117 @@ export function marketingSeo(origin: string): PageSeo {
     canonical: origin.endsWith("/") ? origin : `${origin}/`,
     siteName: "Afterwhistle",
     type: "website"
+  };
+}
+
+export function canonicalUrl(origin: string, pathname: string, season?: string) {
+  const base = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+  const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  const url = `${base}${path}`;
+  const seasonLabel = season?.trim();
+  if (!seasonLabel) return url;
+  return `${url}?season=${encodeURIComponent(seasonLabel)}`;
+}
+
+export function leagueTabSeo(
+  league: PublicLeague,
+  tab: AppTab,
+  origin: string,
+  pathname: string,
+  season: string
+): PageSeo {
+  const tabLabel =
+    tab === "players"
+      ? "Player stats"
+      : tab === "teams"
+        ? "Standings"
+        : tab === "schedule"
+          ? "Schedule"
+          : "Player cards";
+  const logo = league.branding?.logo;
+  const image = logo?.startsWith("http") ? logo : undefined;
+  return {
+    title: `${league.shortName} ${tabLabel} · ${season}`,
+    description: `Browse ${league.name} ${tabLabel.toLowerCase()} for the ${season} season — standings, schedules, and player stats.`,
+    canonical: canonicalUrl(origin, pathname || tabPath(tab), season),
+    image,
+    siteName: league.shortName,
+    type: "website"
+  };
+}
+
+export function playerSeo(
+  league: PublicLeague,
+  profile: PlayerProfile,
+  origin: string,
+  pathname: string,
+  season: string,
+  image?: string
+): PageSeo {
+  const seasonRow = profile.seasons.find((row) => row.season === season);
+  const team = seasonRow?.team ?? profile.currentTeam;
+  const points = seasonRow?.derived.totalPoints ?? profile.career.derived.totalPoints;
+  const touchdowns = seasonRow?.derived.totalTouchdowns ?? profile.career.derived.totalTouchdowns;
+  return {
+    title: `${profile.name}${team ? ` · ${team}` : ""} · ${league.shortName} · ${season}`,
+    description: `${profile.name}${team ? ` (${team})` : ""} — ${points} pts and ${touchdowns} TD in the ${season} ${league.name} season.`,
+    canonical: canonicalUrl(origin, pathname, season),
+    image,
+    siteName: league.shortName,
+    type: "profile"
+  };
+}
+
+export function teamSeo(
+  league: PublicLeague,
+  teamName: string,
+  origin: string,
+  pathname: string,
+  season: string,
+  standing?: TeamStanding,
+  logoUrl?: string
+): PageSeo {
+  const record = standing
+    ? `${standing.wins}-${standing.losses}${standing.ties ? `-${standing.ties}` : ""}`
+    : undefined;
+  const image = logoUrl?.startsWith("http") ? logoUrl : undefined;
+  return {
+    title: `${teamName} · ${league.shortName} · ${season}`,
+    description: record
+      ? `${teamName} (${record}) in the ${season} ${league.name} season — roster, standings, and player stats.`
+      : `${teamName} roster and player stats for the ${season} ${league.name} season.`,
+    canonical: canonicalUrl(origin, pathname, season),
+    image,
+    siteName: league.shortName,
+    type: "website"
+  };
+}
+
+export function gameSeo(
+  league: PublicLeague,
+  game: ScheduleGame,
+  origin: string,
+  pathname: string,
+  season: string
+): PageSeo {
+  const [home, away] = game.teams;
+  const headline =
+    game.status === "final" && home && away
+      ? `${home.name} ${home.score ?? 0}, ${away.name} ${away.score ?? 0}`
+      : game.title;
+  const statusLabel = game.status === "final" ? "Final" : game.status === "upcoming" ? "Upcoming" : "Game";
+  const image = home?.logoUrl?.startsWith("http")
+    ? home.logoUrl
+    : away?.logoUrl?.startsWith("http")
+      ? away.logoUrl
+      : undefined;
+  return {
+    title: `${headline} · ${league.shortName} · ${season}`,
+    description: `${statusLabel}: ${game.title}${game.venue ? ` at ${game.venue}` : ""}. Box score and player stats.`,
+    canonical: canonicalUrl(origin, pathname, season),
+    image,
+    siteName: league.shortName,
+    type: "article"
   };
 }
 
@@ -108,9 +221,13 @@ export function renderRobotsTxt(origin: string) {
   return ["User-agent: *", "Allow: /", "Disallow: /admin", `Sitemap: ${base}/sitemap.xml`, ""].join("\n");
 }
 
-export function renderSitemapXml(origin: string, host: string) {
+export async function renderSitemapXml(
+  origin: string,
+  host: string,
+  extraUrls: string[] = []
+) {
   const base = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-  const urls = new Set<string>();
+  const urls = new Set<string>(extraUrls);
 
   if (isMarketingHost(host)) {
     urls.add(`${base}/`);

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
 import { BrandMark } from "./league/BrandMark";
 import { useLeague, usePresentation } from "./league/LeagueProvider";
 import { readStat } from "./league/readStat";
-import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers, peekSeasons, playersCacheReady } from "./api";
+import { formatUpdatedAt, getGame, getPlayers, getPlayerProfile, getSchedule, getSeasons, peekSeasonPlayers, peekSeasons, playersCacheReady } from "./api";
 import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
@@ -16,7 +16,8 @@ import { TradingCard } from "./components/TradingCard";
 import { toTradingCard } from "./lib/cards";
 import { filterAndSortPlayers } from "./lib/query";
 import { trackDrawerClose, trackEvent, trackFilter, trackPageView } from "./lib/analytics";
-import { leagueTabSeo, setPageSeo } from "./lib/seo";
+import { gameSeo, leagueTabSeo, playerSeoFromRoster, setPageSeo, teamSeo } from "./lib/seo";
+import { buildAppPath, navigateApp, parseAppRoute, resolveTeamName, slugifyTeam } from "./lib/routes";
 import { useDebouncedSearchTrack } from "./lib/useDebouncedSearchTrack";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
@@ -26,15 +27,18 @@ import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInf
 type Tab = "players" | "teams" | "schedule" | "cards";
 type ScheduleView = "all" | "results" | "upcoming";
 
+const initialRoute = parseAppRoute(window.location.pathname, window.location.search);
+
 export default function App() {
   const league = useLeague();
   const presentation = usePresentation();
   const sorts = presentation.sortOptions;
   const bootSeasons = peekSeasons();
+  const skipUrlSync = useRef(false);
   const [data, setData] = useState<PlayersResponse | null>(() => peekSeasonPlayers(bootSeasons?.defaultSeason ?? league.publicSeason));
   const [seasons, setSeasons] = useState<SeasonInfo[]>(() => bootSeasons?.seasons ?? []);
-  const [season, setSeason] = useState(() => bootSeasons?.defaultSeason ?? league.publicSeason);
-  const [tab, setTab] = useState<Tab>("players");
+  const [season, setSeason] = useState(() => initialRoute.season ?? bootSeasons?.defaultSeason ?? league.publicSeason);
+  const [tab, setTab] = useState<Tab>(initialRoute.tab);
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
@@ -54,16 +58,57 @@ export default function App() {
   const { printCards, requestPrint } = usePrintCards();
   const printCtx = { league: league.slug, season, tab };
 
+  function currentRoute() {
+    return {
+      tab,
+      season,
+      playerId: selected?.id,
+      teamSlug: activeTeam ? slugifyTeam(activeTeam) : undefined,
+      gameId: selectedGame?.id
+    };
+  }
+
+  function applyRoute(route: ReturnType<typeof parseAppRoute>) {
+    setTab(route.tab);
+    if (route.season) setSeason(route.season);
+    setSelected(null);
+    setSelectedGame(null);
+    setActiveTeam(null);
+    setSearch("");
+    setTeam("");
+
+    if (route.teamSlug) {
+      setTab("teams");
+    }
+    if (route.playerId) {
+      setTab(route.tab === "cards" ? "cards" : "players");
+    }
+    if (route.gameId != null) {
+      setTab("schedule");
+    }
+  }
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
-    const seo = leagueTabSeo(league, tab, season);
-    setPageSeo(seo);
-    trackPageView(`/${tab}`, `${league.name} · ${tab}`);
-  }, [tab, league.name, league.slug, league.shortName, season]);
+    const onPop = () => {
+      skipUrlSync.current = true;
+      applyRoute(parseAppRoute(window.location.pathname, window.location.search));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    if (skipUrlSync.current) {
+      skipUrlSync.current = false;
+      return;
+    }
+    navigateApp(currentRoute());
+  }, [tab, season, selected?.id, activeTeam, selectedGame?.id]);
 
   useEffect(() => {
     const next = presentation.sortOptions[0]?.key;
@@ -72,7 +117,6 @@ export default function App() {
 
   useEffect(() => {
     const boot = peekSeasons();
-    setSeason(boot?.defaultSeason ?? league.publicSeason);
     if (!boot?.seasons.length) setSeasons([]);
     getSeasons()
       .then((result) => {
@@ -155,10 +199,6 @@ export default function App() {
     };
   }, [season, tab, league.slug]);
 
-  useEffect(() => {
-    if (tab !== "schedule") setSelectedGame(null);
-  }, [tab]);
-
   const rosterPlayers = useMemo(
     () => withCanonicalTeams(data?.players ?? [], data?.meta.standings ?? [], league.franchiseTeamNames),
     [data?.players, data?.meta.standings, league.franchiseTeamNames]
@@ -214,6 +254,88 @@ export default function App() {
   const sourceLabel = data?.meta.source === "sportspress" ? "SportsPress" : league.copy.htmlSourceLabel;
   const activeTeamSummary = activeTeam ? teamSummaries.find((item) => item.name === activeTeam) : null;
 
+  useEffect(() => {
+    const path = buildAppPath(currentRoute()).split("?")[0] ?? "/";
+    const teamLogos = data?.meta.teamLogos;
+    if (selectedGame) {
+      setPageSeo(gameSeo(league, selectedGame, season, path));
+    } else if (selected) {
+      setPageSeo(playerSeoFromRoster(league, selected, season, path, teamLogos));
+    } else if (activeTeam) {
+      setPageSeo(
+        teamSeo(league, activeTeam, season, path, activeTeamSummary?.standing, activeTeamSummary?.logoUrl)
+      );
+    } else {
+      setPageSeo(leagueTabSeo(league, tab, season, path));
+    }
+    trackPageView(buildAppPath(currentRoute()));
+  }, [tab, season, selected, selectedGame, activeTeam, activeTeamSummary, league, data?.meta.teamLogos]);
+
+  useEffect(() => {
+    const route = parseAppRoute(window.location.pathname, window.location.search);
+    if (!route.teamSlug || !teams.length) return;
+    const name = resolveTeamName(route.teamSlug, teams);
+    if (name && activeTeam !== name) {
+      setTab("teams");
+      setActiveTeam(name);
+    }
+  }, [teams, season, activeTeam]);
+
+  useEffect(() => {
+    const route = parseAppRoute(window.location.pathname, window.location.search);
+    if (!route.playerId || selected?.id === route.playerId) return;
+    const found = rosterPlayers.find((player) => player.id === route.playerId);
+    if (found) {
+      setSelectedGame(null);
+      setSelected(found);
+      return;
+    }
+    let cancelled = false;
+    getPlayerProfile(route.playerId)
+      .then((profile) => {
+        if (cancelled) return;
+        const row = profile.seasons.find((item) => item.season === season);
+        if (!row) return;
+        setSelectedGame(null);
+        setSelected({
+          id: profile.id,
+          name: profile.name,
+          profileUrl: profile.profileUrl,
+          team: row.team ?? profile.currentTeam,
+          sourceId: row.sourceId ?? profile.sourceId,
+          stats: row.stats,
+          derived: row.derived
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [rosterPlayers, season, selected?.id]);
+
+  useEffect(() => {
+    const route = parseAppRoute(window.location.pathname, window.location.search);
+    if (route.gameId == null || selectedGame?.id === route.gameId) return;
+    setTab("schedule");
+    const found = schedule?.games.find((game) => game.id === route.gameId);
+    if (found) {
+      setSelected(null);
+      setSelectedGame(found);
+      return;
+    }
+    let cancelled = false;
+    getGame(route.gameId, season)
+      .then((detail) => {
+        if (cancelled) return;
+        setSelected(null);
+        setSelectedGame(detail.game);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [schedule, season, selectedGame?.id]);
+
   const filteredGames = useMemo(() => {
     const games = filterScheduleGames(schedule?.games ?? [], team, search);
     const parts = partitionSchedule(games);
@@ -253,6 +375,8 @@ export default function App() {
   function goPlayers() {
     pickTab("players");
     setActiveTeam(null);
+    setSelected(null);
+    setSelectedGame(null);
   }
 
   function goTeams() {
@@ -260,6 +384,8 @@ export default function App() {
     setTeam("");
     setActiveTeam(null);
     setSearch("");
+    setSelected(null);
+    setSelectedGame(null);
   }
 
   function goSchedule() {
@@ -267,11 +393,13 @@ export default function App() {
     setActiveTeam(null);
     setSearch("");
     setSelected(null);
+    setSelectedGame(null);
   }
 
   function goCards() {
     pickTab("cards");
     setActiveTeam(null);
+    setSelected(null);
     setSelectedGame(null);
   }
 
@@ -291,11 +419,17 @@ export default function App() {
   function closePlayerDrawer() {
     trackDrawerClose("player", { league: league.slug, player_id: selected?.id ?? "" });
     setSelected(null);
+    if (activeTeam) {
+      navigateApp({ tab: "teams", teamSlug: slugifyTeam(activeTeam), season });
+    } else {
+      navigateApp({ tab, season });
+    }
   }
 
   function closeGameDrawer() {
     trackDrawerClose("game", { league: league.slug, game_id: selectedGame?.id ?? "" });
     setSelectedGame(null);
+    navigateApp({ tab: "schedule", season });
   }
 
   return (
@@ -532,6 +666,7 @@ export default function App() {
                     onClick={() => {
                       trackEvent("team_back", { league: league.slug, season, team_name: activeTeam });
                       setActiveTeam(null);
+                      navigateApp({ tab: "teams", season });
                     }}
                   >
                     <ArrowLeft size={15} /> All teams

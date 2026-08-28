@@ -20,6 +20,7 @@ import {
   renderSitemapXml,
   requestOrigin
 } from "./lib/pageSeo.js";
+import { buildSitemapUrls, resolveLeaguePageSeo } from "./lib/resolvePageSeo.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -254,10 +255,19 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
       res.type("text/plain").send(renderRobotsTxt(origin));
     });
 
-    app.get("/sitemap.xml", (req, res) => {
+    app.get("/sitemap.xml", async (req, res) => {
       const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
       const origin = requestOrigin(req);
-      res.type("application/xml").send(renderSitemapXml(origin, host));
+      if (isMarketingHost(host)) {
+        return res.type("application/xml").send(await renderSitemapXml(origin, host));
+      }
+      try {
+        const { league, adapter } = tenant(req);
+        const urls = await buildSitemapUrls(origin.replace(/\/$/, ""), league, adapter);
+        return res.type("application/xml").send(await renderSitemapXml(origin, host, urls));
+      } catch {
+        return res.type("application/xml").send(await renderSitemapXml(origin, host));
+      }
     });
 
     app.use(express.static(clientDist, { index: false }));
@@ -265,17 +275,27 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
     async function sendSpa(req: express.Request, res: express.Response) {
       const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
       const origin = requestOrigin(req);
+      const queryIndex = req.originalUrl.indexOf("?");
+      const search = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
       if (isMarketingHost(host)) {
         return res.type("html").send(injectPageSeo(indexTemplate, marketingSeo(origin)));
       }
 
       try {
         const { league, adapter } = tenant(req);
-        const html = await buildBootstrappedHtml(indexTemplate, league, adapter, origin);
+        const html = await buildBootstrappedHtml(indexTemplate, league, adapter, origin, req.path, search);
         return res.type("html").send(html);
       } catch {
-        const { league } = tenant(req);
-        return res.type("html").send(injectPageSeo(indexTemplate, leagueSeo(toPublicLeague(league), origin, league.publicSeason)));
+        const { league, adapter } = tenant(req);
+        try {
+          const seo = await resolveLeaguePageSeo(league, adapter, origin, req.path, search);
+          return res.type("html").send(injectPageSeo(indexTemplate, seo));
+        } catch {
+          const { league } = tenant(req);
+          return res
+            .type("html")
+            .send(injectPageSeo(indexTemplate, leagueSeo(toPublicLeague(league), origin, league.publicSeason)));
+        }
       }
     }
 
@@ -306,10 +326,12 @@ async function buildBootstrappedHtml(
   indexTemplate: string,
   league: League,
   adapter: LeagueDataAdapter,
-  origin: string
+  origin: string,
+  pathname: string,
+  search: string
 ) {
-  const publicLeague = toPublicLeague(league);
-  let html = injectPageSeo(indexTemplate, leagueSeo(publicLeague, origin, league.publicSeason));
+  const seo = await resolveLeaguePageSeo(league, adapter, origin, pathname, search);
+  let html = injectPageSeo(indexTemplate, seo);
 
   const payload = await Promise.race([
     loadBootstrapPayload(league, adapter),
