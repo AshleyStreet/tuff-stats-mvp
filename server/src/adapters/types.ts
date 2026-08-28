@@ -12,6 +12,8 @@ export type AdapterFetchOpts = {
   force?: boolean;
   season?: string;
   preferCache?: boolean;
+  /** Never hit upstream APIs — return cached snapshots only (for HTML bootstrap). */
+  cacheOnly?: boolean;
 };
 
 export type AdapterWarmState = {

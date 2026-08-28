@@ -65,8 +65,9 @@ export default function App() {
   }, [league.slug, presentation.sortOptions]);
 
   useEffect(() => {
-    setSeason(league.publicSeason);
-    setSeasons([]);
+    const boot = peekSeasons();
+    setSeason(boot?.defaultSeason ?? league.publicSeason);
+    if (!boot?.seasons.length) setSeasons([]);
     getSeasons()
       .then((result) => {
         setSeasons(result.seasons);

@@ -15,8 +15,10 @@ import {
 export function createTuffAdapter(): LeagueDataAdapter {
   return {
     leagueId: "tuff",
-    getSeasons: (opts) => getSeasons(opts?.force ?? false, opts?.preferCache ?? false),
-    getPlayers: (opts) => getPlayers(opts?.force ?? false, opts?.season, opts?.preferCache ?? false),
+    getSeasons: (opts) =>
+      getSeasons(opts?.force ?? false, opts?.preferCache ?? false, opts?.cacheOnly ?? false),
+    getPlayers: (opts) =>
+      getPlayers(opts?.force ?? false, opts?.season, opts?.preferCache ?? false, opts?.cacheOnly ?? false),
     getStandings: (opts) => getStandings(opts?.force ?? false, opts?.season),
     getSchedule: (opts) => getSchedule(opts?.force ?? false, opts?.season),
     getGame: (eventId, opts) => getGame(eventId, opts?.season),

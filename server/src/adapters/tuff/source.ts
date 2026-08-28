@@ -229,14 +229,15 @@ function seasonsFromLists(lists: SpList[]): SeasonInfo[] {
   return [...byYear.values()].sort((a, b) => Number(b.year) - Number(a.year));
 }
 
-export async function getSeasons(force = false, preferCache = false): Promise<SeasonInfo[]> {
-  if (!force && preferCache) {
+export async function getSeasons(force = false, preferCache = false, cacheOnly = false): Promise<SeasonInfo[]> {
+  if (!force && (preferCache || cacheOnly)) {
     if (seasonsMemory?.seasons.length) return seasonsMemory.seasons;
     const disk = readDisk<SeasonInfo[]>("seasons.json");
     if (disk?.payload?.length) {
       seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
       return disk.payload;
     }
+    if (cacheOnly) return [];
   }
 
   if (!force && seasonsMemory) {
@@ -896,8 +897,13 @@ export async function getGame(eventId: string, seasonYear?: string): Promise<Gam
   return decorateGameDetail(detail);
 }
 
-export async function getPlayers(force = false, seasonYear?: string, preferCache = false): Promise<PlayersResponse> {
-  const season = await resolveSeason(seasonYear, preferCache && !force);
+export async function getPlayers(
+  force = false,
+  seasonYear?: string,
+  preferCache = false,
+  cacheOnly = false
+): Promise<PlayersResponse> {
+  const season = await resolveSeason(seasonYear, (preferCache || cacheOnly) && !force);
   const cached = readSeasonCache(season.year);
 
   const attachStandings = async (data: PlayersResponse, forceStandings = false) => {
@@ -911,6 +917,12 @@ export async function getPlayers(force = false, seasonYear?: string, preferCache
     const withStandings = await attachStandings(data, forceStandings);
     return withPlayersLeague(await attachTeamLogos(withStandings));
   };
+
+  // HTML bootstrap: serve a warm snapshot only — never block on upstream APIs.
+  if (!force && cacheOnly) {
+    if (!cached) throw new Error("Season cache miss");
+    return withPlayersLeague(cached.data);
+  }
 
   // Career / warm-path reads: trust memory/disk snapshots; skip SportsPress fingerprint chatter.
   if (!force && preferCache && cached) {
