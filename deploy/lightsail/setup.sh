@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/opt/tuff-stats}"
 REPO_URL="${REPO_URL:-https://github.com/AshleyStreet/tuff-stats-mvp.git}"
-BRANCH="${BRANCH:-feat/lightsail}"
+BRANCH="${BRANCH:-main}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run as root (sudo -i) so Docker can be installed." >&2

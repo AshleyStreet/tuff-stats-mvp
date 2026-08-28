@@ -85,7 +85,7 @@ curl -X POST http://127.0.0.1/api/admin/refresh \
 
 ```bash
 cd /opt/tuff-stats
-git pull --ff-only origin feat/lightsail
+git pull --ff-only origin main
 docker compose up -d --build
 ```
 

@@ -1,4 +1,4 @@
-type AnalyticsProps = Record<string, string | number | boolean>;
+export type AnalyticsProps = Record<string, string | number | boolean>;
 
 type AnalyticsConfig = {
   gaId?: string;
