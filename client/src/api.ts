@@ -78,7 +78,7 @@ export async function getSeasons() {
   return data;
 }
 
-function playersCacheReady(data: PlayersResponse) {
+export function playersCacheReady(data: PlayersResponse) {
   return Boolean(data.meta.teamLogos && Object.keys(data.meta.teamLogos).length);
 }
 

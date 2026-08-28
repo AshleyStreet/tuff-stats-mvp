@@ -12,6 +12,15 @@ import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
 import { injectPageBootstrap, type PageBootstrap } from "./lib/pageBootstrap.js";
+import {
+  injectPageSeo,
+  leagueSeo,
+  marketingSeo,
+  renderRobotsTxt,
+  renderSitemapXml,
+  requestOrigin
+} from "./lib/pageSeo.js";
+import { buildSitemapUrls, resolveLeaguePageSeo } from "./lib/resolvePageSeo.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -241,20 +250,52 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
     const indexPath = path.join(clientDist, "index.html");
     const indexTemplate = fs.readFileSync(indexPath, "utf8");
 
+    app.get("/robots.txt", (req, res) => {
+      const origin = requestOrigin(req);
+      res.type("text/plain").send(renderRobotsTxt(origin));
+    });
+
+    app.get("/sitemap.xml", async (req, res) => {
+      const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
+      const origin = requestOrigin(req);
+      if (isMarketingHost(host)) {
+        return res.type("application/xml").send(await renderSitemapXml(origin, host));
+      }
+      try {
+        const { league, adapter } = tenant(req);
+        const urls = await buildSitemapUrls(origin.replace(/\/$/, ""), league, adapter);
+        return res.type("application/xml").send(await renderSitemapXml(origin, host, urls));
+      } catch {
+        return res.type("application/xml").send(await renderSitemapXml(origin, host));
+      }
+    });
+
     app.use(express.static(clientDist, { index: false }));
 
     async function sendSpa(req: express.Request, res: express.Response) {
       const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
+      const origin = requestOrigin(req);
+      const queryIndex = req.originalUrl.indexOf("?");
+      const search = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
       if (isMarketingHost(host)) {
-        return res.type("html").send(indexTemplate);
+        return res.type("html").send(injectPageSeo(indexTemplate, marketingSeo(origin)));
       }
 
       try {
         const { league, adapter } = tenant(req);
-        const html = await buildBootstrappedHtml(indexTemplate, league, adapter);
+        const html = await buildBootstrappedHtml(indexTemplate, league, adapter, origin, req.path, search);
         return res.type("html").send(html);
       } catch {
-        return res.type("html").send(indexTemplate);
+        const { league, adapter } = tenant(req);
+        try {
+          const seo = await resolveLeaguePageSeo(league, adapter, origin, req.path, search);
+          return res.type("html").send(injectPageSeo(indexTemplate, seo));
+        } catch {
+          const { league } = tenant(req);
+          return res
+            .type("html")
+            .send(injectPageSeo(indexTemplate, leagueSeo(toPublicLeague(league), origin, league.publicSeason)));
+        }
       }
     }
 
@@ -281,13 +322,23 @@ function sendAdminError(res: express.Response, error: unknown) {
   return res.status(500).json({ error: message });
 }
 
-async function buildBootstrappedHtml(indexTemplate: string, league: League, adapter: LeagueDataAdapter) {
+async function buildBootstrappedHtml(
+  indexTemplate: string,
+  league: League,
+  adapter: LeagueDataAdapter,
+  origin: string,
+  pathname: string,
+  search: string
+) {
+  const seo = await resolveLeaguePageSeo(league, adapter, origin, pathname, search);
+  let html = injectPageSeo(indexTemplate, seo);
+
   const payload = await Promise.race([
     loadBootstrapPayload(league, adapter),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), BOOTSTRAP_TIMEOUT_MS))
   ]);
-  if (!payload) return indexTemplate;
-  return injectPageBootstrap(indexTemplate, payload);
+  if (!payload) return html;
+  return injectPageBootstrap(html, payload);
 }
 
 const BOOTSTRAP_TIMEOUT_MS = 300;

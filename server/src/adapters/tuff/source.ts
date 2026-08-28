@@ -50,7 +50,7 @@ const DEFAULT_SEASON = league.publicSeason;
 const USER_AGENT = league.source.userAgent;
 const STATS_LIST_SUFFIX = league.source.defaultStatsListSuffix;
 const LIST_META_FIELDS = "id,slug,title,seasons,link,modified,modified_gmt";
-const TEAM_ENRICHMENT_VERSION = "3";
+const TEAM_ENRICHMENT_VERSION = "4";
 
 function readDisk<T>(name: string) {
   return readLeagueCache<T>(league.slug, name);
@@ -772,7 +772,11 @@ async function withResolvedTeamNames(games: ScheduleGame[]): Promise<ScheduleGam
 
 async function withTeamLogos(games: ScheduleGame[]): Promise<ScheduleGame[]> {
   if (!games.length) return games;
-  const logos = (await loadTeamCatalog()).logos;
+  let logos = (await loadTeamCatalog()).logos;
+  if (!logos.size) {
+    teamCatalogMemory = null;
+    logos = (await loadTeamCatalog(true)).logos;
+  }
   return applyTeamLogos(games, logos);
 }
 
@@ -915,7 +919,13 @@ export async function getPlayers(
 
   const finishPlayers = async (data: PlayersResponse, forceStandings = false) => {
     const withStandings = await attachStandings(data, forceStandings);
-    return withPlayersLeague(await attachTeamLogos(withStandings));
+    const finished = withPlayersLeague(await attachTeamLogos(withStandings));
+    const hadLogos = Boolean(data.meta.teamLogos && Object.keys(data.meta.teamLogos).length);
+    const hasLogos = Boolean(finished.meta.teamLogos && Object.keys(finished.meta.teamLogos).length);
+    if (!hadLogos && hasLogos && cached) {
+      writeSeasonCache(season.year, cached.fingerprint, finished);
+    }
+    return finished;
   };
 
   // HTML bootstrap: serve a warm snapshot only — never block on upstream APIs.
@@ -1066,8 +1076,19 @@ export async function refreshSeasonData(seasonYear?: string) {
   return { refreshed, failed };
 }
 
-async function loadTeamCatalog(): Promise<{ names: Map<number, string>; logos: Map<number, string> }> {
-  if (teamCatalogMemory?.names.size) return teamCatalogMemory;
+function shouldPersistTeamCatalog(
+  names: Map<number, string>,
+  logos: Map<number, string>,
+  mediaIds: Map<number, number>
+) {
+  if (!names.size) return false;
+  if (logos.size) return true;
+  // Teams exist but none declare featured media — cache the empty logo map.
+  return mediaIds.size === 0;
+}
+
+async function loadTeamCatalog(force = false): Promise<{ names: Map<number, string>; logos: Map<number, string> }> {
+  if (!force && teamCatalogMemory?.names.size && teamCatalogMemory.logos.size) return teamCatalogMemory;
 
   const names = new Map<number, string>();
   const mediaIds = new Map<number, number>();
@@ -1106,7 +1127,7 @@ async function loadTeamCatalog(): Promise<{ names: Map<number, string>; logos: M
   }
 
   const catalog = { names, logos };
-  if (names.size) teamCatalogMemory = catalog;
+  if (shouldPersistTeamCatalog(names, logos, mediaIds)) teamCatalogMemory = catalog;
   return catalog;
 }
 
@@ -1139,7 +1160,7 @@ function logosByCanonicalName(names: Map<number, string>, logos: Map<number, str
 
 function attachTeamLogosSync(data: PlayersResponse): PlayersResponse {
   if (data.meta.teamLogos && Object.keys(data.meta.teamLogos).length) return data;
-  if (!teamCatalogMemory?.names.size) return data;
+  if (!teamCatalogMemory?.logos.size) return data;
   const teamLogos = logosByCanonicalName(teamCatalogMemory.names, teamCatalogMemory.logos);
   if (!Object.keys(teamLogos).length) return data;
   return { ...data, meta: { ...data.meta, teamLogos } };
@@ -1148,14 +1169,24 @@ function attachTeamLogosSync(data: PlayersResponse): PlayersResponse {
 async function attachTeamLogos(data: PlayersResponse): Promise<PlayersResponse> {
   const synced = attachTeamLogosSync(data);
   if (synced.meta.teamLogos && Object.keys(synced.meta.teamLogos).length) return synced;
-  const catalog = await loadTeamCatalog();
-  const teamLogos = logosByCanonicalName(catalog.names, catalog.logos);
+
+  let catalog = await loadTeamCatalog();
+  let teamLogos = logosByCanonicalName(catalog.names, catalog.logos);
+  if (!Object.keys(teamLogos).length && catalog.names.size && !catalog.logos.size) {
+    teamCatalogMemory = null;
+    catalog = await loadTeamCatalog(true);
+    teamLogos = logosByCanonicalName(catalog.names, catalog.logos);
+  }
   if (!Object.keys(teamLogos).length) return data;
   return { ...data, meta: { ...data.meta, teamLogos } };
 }
 
 async function decorateGameDetail(detail: GameDetail): Promise<GameDetail> {
-  const logos = (await loadTeamCatalog()).logos;
+  let logos = (await loadTeamCatalog()).logos;
+  if (!logos.size) {
+    teamCatalogMemory = null;
+    logos = (await loadTeamCatalog(true)).logos;
+  }
   if (!logos.size) return withGameLeague(detail);
   const game = applyTeamLogos([detail.game], logos)[0] ?? detail.game;
   const sides = detail.sides.map((side) => {

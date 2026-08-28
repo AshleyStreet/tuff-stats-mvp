@@ -4,6 +4,7 @@ import "./marketing.css";
 import { LeaguePreviewProvider } from "../league/LeagueProvider";
 import { tuffPublicLeague } from "../league/tuff";
 import { trackEvent, trackPageView } from "../lib/analytics";
+import { setPageSeo } from "../lib/seo";
 import { marketingSampleCard } from "../lib/marketingSampleCard";
 
 const DEMO_MAIL = "hello@afterwhistle.ca";
@@ -45,9 +46,15 @@ export function MarketingHome() {
   const sampleCard = marketingSampleCard();
 
   useEffect(() => {
-    document.title = "Afterwhistle · League stats boards";
+    const title = "Afterwhistle · League stats boards";
     document.documentElement.classList.add("marketing");
-    trackPageView("/", document.title);
+    setPageSeo({
+      title,
+      description:
+        "Standings, schedules, and player cards for rec leagues — under your club's name and colors, without replacing your existing website.",
+      siteName: "Afterwhistle"
+    });
+    trackPageView("/", title);
     return () => {
       document.documentElement.classList.remove("marketing");
     };
