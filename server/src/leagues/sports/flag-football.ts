@@ -101,9 +101,7 @@ export const flagFootballPresentation: StatPresentation = {
   cardDefaults: [
     { key: "totalPoints", label: "Total points", short: "PTS" },
     { key: "totalTouchdowns", label: "Total TDs", short: "TD" },
-    rec,
-    int,
-    sack
+    rec
   ],
   cardOptions: [
     { key: "totalPoints", label: "Total points", short: "PTS" },

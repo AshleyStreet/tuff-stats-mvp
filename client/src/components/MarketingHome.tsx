@@ -1,5 +1,10 @@
 import { useEffect } from "react";
+import { TradingCard } from "./TradingCard";
 import "./marketing.css";
+import { LeaguePreviewProvider } from "../league/LeagueProvider";
+import { tuffPublicLeague } from "../league/tuff";
+import { trackEvent, trackPageView } from "../lib/analytics";
+import { marketingSampleCard } from "../lib/marketingSampleCard";
 
 const DEMO_MAIL = "hello@afterwhistle.ca";
 const DEMO_HREF = `mailto:${DEMO_MAIL}?subject=Afterwhistle%20demo`;
@@ -32,10 +37,17 @@ const FAQS = [
   }
 ] as const;
 
+function trackMarketingClick(target: string) {
+  trackEvent("marketing_click", { target });
+}
+
 export function MarketingHome() {
+  const sampleCard = marketingSampleCard();
+
   useEffect(() => {
     document.title = "Afterwhistle · League stats boards";
     document.documentElement.classList.add("marketing");
+    trackPageView("/", document.title);
     return () => {
       document.documentElement.classList.remove("marketing");
     };
@@ -48,10 +60,11 @@ export function MarketingHome() {
           Afterwhistle
         </span>
         <nav className="aw-nav" aria-label="Primary">
-          <a href="#how">How it works</a>
-          <a href="#product">The board</a>
-          <a href="#faq">FAQ</a>
-          <a className="aw-nav-cta" href={DEMO_HREF}>
+          <a href="#how" onClick={() => trackMarketingClick("nav_how")}>How it works</a>
+          <a href="#product" onClick={() => trackMarketingClick("nav_product")}>The board</a>
+          <a href="#faq" onClick={() => trackMarketingClick("nav_faq")}>FAQ</a>
+          <a className="aw-nav-cta" href={DEMO_HREF}
+            onClick={() => trackMarketingClick("book_demo")}>
             Book a demo
           </a>
         </nav>
@@ -81,10 +94,12 @@ export function MarketingHome() {
               tearing up WordPress.
             </p>
             <div className="aw-cta aw-rise aw-rise-4">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}>
+              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
+            onClick={() => trackMarketingClick("book_demo")}>
                 Book a demo
               </a>
-              <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}>
+              <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}
+            onClick={() => trackMarketingClick("live_demo")}>
                 See a live league
               </a>
             </div>
@@ -145,7 +160,12 @@ export function MarketingHome() {
             <p className="aw-section-lede">
               We take the standings and player stats you already post and put them on a fast board
               that looks like your club — like{" "}
-              <a href={LIVE_LEAGUE_URL}>tuff.afterwhistle.ca</a>.
+              <a
+                href={LIVE_LEAGUE_URL}
+                onClick={() => trackMarketingClick("live_demo")}
+              >
+                tuff.afterwhistle.ca
+              </a>.
             </p>
           </div>
           <figure className="aw-shot aw-shot-board">
@@ -170,15 +190,11 @@ export function MarketingHome() {
               screenshot.
             </p>
           </div>
-          <figure className="aw-shot aw-shot-card">
-            <img
-              src="/marketing/aw-product-card.png"
-              alt="Player trading card with season stats"
-              width={900}
-              height={1200}
-              loading="lazy"
-            />
-          </figure>
+          <div className="aw-card-preview">
+            <LeaguePreviewProvider league={tuffPublicLeague}>
+              <TradingCard card={sampleCard} />
+            </LeaguePreviewProvider>
+          </div>
         </section>
 
         <section className="aw-section aw-how aw-how-stack" id="how" aria-labelledby="aw-how-title">
@@ -265,10 +281,12 @@ export function MarketingHome() {
               look like.
             </p>
             <div className="aw-cta">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}>
+              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
+            onClick={() => trackMarketingClick("book_demo")}>
                 Book a demo
               </a>
-              <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}>
+              <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}
+            onClick={() => trackMarketingClick("live_demo")}>
                 See a live league
               </a>
             </div>
@@ -285,7 +303,15 @@ export function MarketingHome() {
             </div>
             <div className="aw-faq-list">
               {FAQS.map((item) => (
-                <details key={item.q} className="aw-faq-item">
+                <details
+                  key={item.q}
+                  className="aw-faq-item"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) {
+                      trackEvent("marketing_faq_open", { question: item.q });
+                    }
+                  }}
+                >
                   <summary>{item.q}</summary>
                   <p>{item.a}</p>
                 </details>
@@ -304,7 +330,8 @@ export function MarketingHome() {
               <span className="aw-headline-break"> the board is already live.</span>
             </p>
             <div className="aw-cta">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}>
+              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
+            onClick={() => trackMarketingClick("book_demo")}>
                 Book a demo
               </a>
             </div>
@@ -324,8 +351,9 @@ export function MarketingHome() {
       <footer className="aw-foot">
         <span>Afterwhistle</span>
         <div className="aw-foot-links">
-          <a href={LIVE_LEAGUE_URL}>Live demo</a>
-          <a href={`mailto:${DEMO_MAIL}`}>Contact</a>
+          <a href={LIVE_LEAGUE_URL}
+            onClick={() => trackMarketingClick("live_demo")}>Live demo</a>
+          <a href={`mailto:${DEMO_MAIL}`} onClick={() => trackMarketingClick("contact")}>Contact</a>
         </div>
       </footer>
     </div>

@@ -50,7 +50,7 @@ describe("flag-football presentation schema", () => {
   it("keeps box score, game log, and card defaults", () => {
     expect(schema.boxScoreColumns.map((column) => column.short)).toEqual(["Rec", "RecTD", "PaTD", "INT", "Sack", "DFL"]);
     expect(schema.gameLogColumns.map((column) => column.short)).toEqual(["Rec", "RecTD", "PaTD", "INT", "Sack", "DFL"]);
-    expect(schema.cardDefaults.map((column) => column.short)).toEqual(["PTS", "TD", "REC", "INT", "SACK"]);
+    expect(schema.cardDefaults.map((column) => column.short)).toEqual(["PTS", "TD", "REC"]);
   });
 });
 

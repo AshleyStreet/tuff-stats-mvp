@@ -388,6 +388,19 @@ html.marketing body::before {
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
 }
 
+.aw-card-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem 0 1rem;
+}
+
+.aw-card-preview .trading-card {
+  width: min(100%, 280px);
+  max-width: 280px;
+  filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.55));
+}
+
 .aw-cards-media {
   background: var(--aw-ink);
 }
@@ -673,7 +686,8 @@ html.marketing body::before {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
   }
 
-  .aw-split--flip > .aw-shot {
+  .aw-split--flip > .aw-shot,
+  .aw-split--flip > .aw-card-preview {
     order: -1;
   }
 
@@ -684,6 +698,11 @@ html.marketing body::before {
   .aw-shot-card {
     justify-self: center;
     max-width: 24rem;
+  }
+
+  .aw-card-preview .trading-card {
+    width: 300px;
+    max-width: 300px;
   }
 
   .aw-how-stack {

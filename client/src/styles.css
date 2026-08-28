@@ -1206,169 +1206,208 @@ button.log-row:hover {
 
 .trading-card-face {
   height: 100%;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-  background: #f3eee4;
-  color: #141414;
-  border: 3px solid #c9a227;
-  outline: 2px solid #1a0a0a;
+  background: #0a0a0a;
+  border-radius: 6px;
   box-shadow:
-    0 10px 22px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px var(--red-deep);
-  border-radius: 3px;
+    0 14px 32px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(227, 27, 35, 0.35);
   transition: transform 0.25s var(--ease), box-shadow 0.25s ease;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
-.tc-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.28em 0.55em;
-  background: linear-gradient(180deg, var(--red), var(--red-deep));
-  color: #fff;
-  font: italic 800 11px/1.2 "Barlow Condensed", sans-serif;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-}
-.tc-art {
+.tc-frame {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
   display: grid;
-  place-items: center;
+  grid-template-rows: 1fr auto auto;
+  height: 100%;
+  padding: 10px 10px 8px;
   background:
-    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(227, 27, 35, 0.35), transparent 62%),
-    linear-gradient(180deg, #2a1214 0%, #0d0d0d 100%);
-  overflow: hidden;
+    linear-gradient(145deg, #1a1a1a 0%, #0d0d0d 48%, #050505 100%);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%
+  );
 }
-.tc-art::after {
+
+.tc-frame::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.16) 50%, transparent 62%);
+  border: 2px solid rgba(227, 27, 35, 0.55);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%
+  );
   pointer-events: none;
+  z-index: 4;
 }
-.tc-logo {
-  width: 58%;
-  height: auto;
-  max-height: 72%;
-  object-fit: contain;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+
+.tc-num {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  z-index: 3;
+  font: italic 800 clamp(42px, 16cqw, 54px) / 0.9 "Barlow Condensed", sans-serif;
+  letter-spacing: -1px;
+  color: transparent;
+  background: linear-gradient(180deg, #f4f6f8 0%, #9aa3ad 45%, #d8dde3 70%, #6b737c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1px rgba(20, 20, 20, 0.65);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
 }
-div.tc-logo {
-  width: 58%;
-  aspect-ratio: 1;
+
+.tc-hero {
+  position: relative;
+  min-height: 0;
+  margin-bottom: 6px;
+  border-radius: 2px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 70% at 30% 80%, rgba(227, 27, 35, 0.55), transparent 58%),
+    radial-gradient(ellipse 60% 50% at 70% 20%, rgba(80, 80, 80, 0.25), transparent 55%),
+    linear-gradient(180deg, #1c1c1c 0%, #080808 100%);
+}
+
+.tc-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 15%;
+  filter: contrast(1.08) saturate(0.92);
+}
+
+.tc-hero-fallback {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
+}
+
+.tc-hero-logo {
+  width: 52%;
+  max-height: 70%;
+  object-fit: contain;
+  opacity: 0.35;
+  filter: grayscale(1) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.6));
+}
+
+div.tc-hero-logo {
+  width: 46%;
+  aspect-ratio: 1;
   border-radius: 50%;
-  color: #f5f5f5;
-  font: 800 28px "Barlow Condensed", sans-serif;
-  background: linear-gradient(145deg, #3a1518, #1a1011);
-  border: 2px solid rgba(215, 181, 109, 0.45);
-}
-.tc-jersey {
-  position: absolute;
-  right: 8px;
-  bottom: 6px;
-  z-index: 1;
-  color: var(--gold);
-  font: italic 800 22px/1 "Barlow Condensed", sans-serif;
-  letter-spacing: 0.5px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-}
-.tc-identity {
-  padding: 8px 10px 4px;
-  background: linear-gradient(180deg, #f7f3ea, #efe8d8);
-}
-.tc-first {
-  display: block;
-  color: #6a4a16;
-  font: 700 10px/1.1 "Barlow Condensed", sans-serif;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-}
-.tc-last {
-  display: block;
-  margin: 1px 0 2px;
-  font: italic 800 26px/0.92 "Barlow Condensed", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  color: #111;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tc-note {
-  display: block;
-  min-height: 1.15em;
-  margin: 0 0 3px;
-  color: #6a4a16;
-  font: italic 700 11px/1.25 "Barlow Condensed", sans-serif;
-  letter-spacing: 0.3px;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
-}
-.tc-note.has-text { color: #3d2a12; }
-.tc-team {
-  display: block;
-  color: var(--red-deep);
-  font: 700 11px/1.2 "Barlow Condensed", sans-serif;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
-}
-.tc-stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border-top: 2px solid #c9a227;
-  background: #fffdf8;
+  place-items: center;
+  font: italic 800 clamp(28px, 12cqw, 40px) "Barlow Condensed", sans-serif;
+  color: rgba(255, 255, 255, 0.45);
+  background: radial-gradient(circle at 30% 30%, #3a1518, #0d0d0d);
+  border: 2px solid rgba(227, 27, 35, 0.35);
 }
-.tc-stats div {
-  padding: 6px 2px 7px;
+
+.tc-hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.55) 78%, rgba(0, 0, 0, 0.92) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.tc-nameplate {
+  position: relative;
+  z-index: 2;
+  margin: 0 -2px 5px;
+  padding: 7px 10px 6px;
   text-align: center;
-  border-right: 1px solid #e6dcc6;
+  background: linear-gradient(180deg, #2a2a2a 0%, #141414 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
 }
-.tc-stats div:last-child { border-right: 0; }
-.tc-stats span {
+
+.tc-name {
   display: block;
-  color: var(--red-deep);
-  font: 700 8px "Barlow Condensed", sans-serif;
-  letter-spacing: 0.4px;
-}
-.tc-stats strong {
-  display: block;
-  margin-top: 2px;
-  font: 800 16px/1 "Barlow Condensed", sans-serif;
-  color: #111;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 1px;
-}
-.tc-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 8px 5px;
-  background: #1a0a0a;
-  color: var(--gold);
-  font: 700 8px "Barlow Condensed", sans-serif;
+  font: italic 800 clamp(14px, 5.5cqw, 18px) / 1 "Barlow Condensed", sans-serif;
   letter-spacing: 0.6px;
   text-transform: uppercase;
+  color: transparent;
+  background: linear-gradient(180deg, #f5f7fa 0%, #b8c0c8 50%, #e8ecf0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tc-footer span:last-child { color: #f3eee4; }
+
+.tc-note {
+  display: block;
+  margin-top: 3px;
+  color: #c9a227;
+  font: italic 700 9px/1.2 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-statbar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  background: linear-gradient(180deg, #121212, #080808);
+  border-top: 1px solid rgba(227, 27, 35, 0.45);
+}
+
+.tc-stat {
+  position: relative;
+  padding: 6px 4px 7px;
+  text-align: center;
+}
+
+.tc-stat:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 12%;
+  right: 0;
+  width: 1px;
+  height: 76%;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: skewX(-12deg);
+}
+
+.tc-stat span {
+  display: block;
+  color: var(--red-bright);
+  font: 700 8px "Barlow Condensed", sans-serif;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.tc-stat strong {
+  display: block;
+  margin-top: 2px;
+  font: italic 800 clamp(16px, 6cqw, 22px) / 1 "Barlow Condensed", sans-serif;
+  color: transparent;
+  background: linear-gradient(180deg, #f0f3f6 0%, #9aa3ad 55%, #d4dae0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
 
 @container tcard (max-width: 200px) {
-  .tc-last { font-size: 20px; }
-  .tc-stats strong { font-size: 13px; }
-  .tc-jersey { font-size: 16px; }
+  .tc-num { font-size: 38px; }
+  .tc-name { font-size: 13px; }
+  .tc-stat strong { font-size: 15px; }
 }
 
 .print-sheet { display: none; }
@@ -1739,8 +1778,8 @@ div.tc-logo {
   }
   .print-sheet .trading-card-face {
     transform: none !important;
-    box-shadow: inset 0 0 0 1px var(--red-deep);
-    border-radius: 0;
+    box-shadow: inset 0 0 0 1px rgba(227, 27, 35, 0.45);
+    border-radius: 4px;
   }
-  .print-sheet .tc-art::after { display: none; }
+  .print-sheet .tc-hero-shade { opacity: 0.85; }
 }

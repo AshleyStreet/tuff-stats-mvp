@@ -5,6 +5,7 @@ import { useLeague, usePresentation } from "../league/LeagueProvider";
 import { readStat } from "../league/readStat";
 import type { StatColumn } from "../league/types";
 import type { BoxScorePlayer, BoxScoreSide, GameDetail, Player, ScheduleGame } from "../types";
+import { trackExternalLink } from "../lib/analytics";
 import { TeamLogo } from "./TeamLogo";
 
 interface Props {
@@ -196,7 +197,13 @@ export function GameDetail({ game, season, players, onClose, onSelectPlayer }: P
       })}
 
       {(detail?.game.link || game.link) && (
-        <a className="source-link" href={detail?.game.link ?? game.link} target="_blank" rel="noreferrer">
+        <a
+          className="source-link"
+          href={detail?.game.link ?? game.link}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => trackExternalLink("game_recap", { league: league.slug, game_id: game.id })}
+        >
           {league.copy.recapLinkLabel} <ExternalLink size={15} />
         </a>
       )}

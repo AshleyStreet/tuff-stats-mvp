@@ -5,6 +5,7 @@ import { toTradingCard, type TradingCardData } from "../lib/cards";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
 import { readStat } from "../league/readStat";
 import { teamLogoUrl } from "../lib/teams";
+import { trackEvent, trackExternalLink } from "../lib/analytics";
 import type { Player, PlayerGameLog, PlayerProfile, ScheduleGame, SeasonAppearance } from "../types";
 import { CareerChart } from "./CareerChart";
 import { KpiRow } from "./StatGrid";
@@ -151,7 +152,9 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
 
   return (
     <aside className="detail-panel">
-      <button className="icon-button close" onClick={onClose} aria-label="Close player details"><X size={20} /></button>
+      <button className="icon-button close" onClick={onClose} aria-label="Close player details">
+        <X size={20} />
+      </button>
 
       <div className="detail-hero">
         <TeamLogo
@@ -242,6 +245,12 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                 key={`${row.season}-${row.sourceId ?? "primary"}`}
                 className={`season-table-row${row.season === selectedSeason ? " active" : ""}`}
                 onClick={() => {
+                  trackEvent("player_season_select", {
+                    league: league.slug,
+                    player_id: player.id,
+                    season: row.season,
+                    from_season: selectedSeason
+                  });
                   setSelectedSeason(row.season);
                   onSelectSeason?.(row.season);
                 }}
@@ -329,7 +338,15 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
       )}
 
       {(profile?.profileUrl || player.profileUrl) && (
-        <a className="source-link" href={profile?.profileUrl ?? player.profileUrl} target="_blank" rel="noreferrer">
+        <a
+          className="source-link"
+          href={profile?.profileUrl ?? player.profileUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() =>
+            trackExternalLink("player_profile", { league: league.slug, player_id: player.id })
+          }
+        >
           {league.copy.profileLinkLabel} <ExternalLink size={15} />
         </a>
       )}

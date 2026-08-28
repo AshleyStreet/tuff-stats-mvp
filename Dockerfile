@@ -7,6 +7,12 @@ RUN npm ci --include=dev --prefix server && npm ci --include=dev --prefix client
 
 COPY server ./server
 COPY client ./client
+ARG VITE_GA_MEASUREMENT_ID=
+ARG VITE_PLAUSIBLE_DOMAIN=
+ARG VITE_PLAUSIBLE_SCRIPT_SRC=
+ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID \
+    VITE_PLAUSIBLE_DOMAIN=$VITE_PLAUSIBLE_DOMAIN \
+    VITE_PLAUSIBLE_SCRIPT_SRC=$VITE_PLAUSIBLE_SCRIPT_SRC
 RUN npm run build --prefix server && npm run build --prefix client
 
 FROM node:20-bookworm-slim AS runtime

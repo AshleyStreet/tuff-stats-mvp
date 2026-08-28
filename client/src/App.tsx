@@ -15,6 +15,8 @@ import { TeamLogo } from "./components/TeamLogo";
 import { TradingCard } from "./components/TradingCard";
 import { toTradingCard } from "./lib/cards";
 import { filterAndSortPlayers } from "./lib/query";
+import { trackDrawerClose, trackEvent, trackFilter, trackPageView } from "./lib/analytics";
+import { useDebouncedSearchTrack } from "./lib/useDebouncedSearchTrack";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
 import { usePrintCards } from "./lib/usePrintCards";
@@ -45,11 +47,16 @@ export default function App() {
   const [scheduleView, setScheduleView] = useState<ScheduleView>("all");
   const [now, setNow] = useState(() => Date.now());
   const { printCards, requestPrint } = usePrintCards();
+  const printCtx = { league: league.slug, season, tab };
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    trackPageView(`/${tab}`, `${league.name} · ${tab}`);
+  }, [tab, league.name, league.slug, season]);
 
   useEffect(() => {
     const next = presentation.sortOptions[0]?.key;
@@ -169,6 +176,14 @@ export default function App() {
   const rosterTeam = tab === "teams" ? activeTeam ?? "" : team;
   const playerSearch = tab === "players" || tab === "cards" || Boolean(activeTeam);
 
+  useDebouncedSearchTrack(
+    search,
+    league.slug,
+    tab,
+    season,
+    Boolean(search.trim()) && (playerSearch || (tab === "teams" && !activeTeam) || tab === "schedule")
+  );
+
   const players = useMemo(
     () =>
       filterAndSortPlayers(rosterPlayers, {
@@ -204,41 +219,50 @@ export default function App() {
     [schedule?.games, team, search]
   );
 
-  function openGame(game: ScheduleGame) {
+  function openGame(game: ScheduleGame, source = "schedule") {
     setSelected(null);
     setSelectedGame(game);
+    trackEvent("game_view", { league: league.slug, season, game_id: game.id, status: game.status, source });
   }
 
   function openGameFromProfile(game: ScheduleGame) {
-    setSelectedGame(game);
+    openGame(game, "player_game_log");
   }
 
-  function openPlayer(player: Player) {
+  function openPlayer(player: Player, source = "list") {
     setSelectedGame(null);
     setSelected(player);
+    trackEvent("player_view", { league: league.slug, season, player_id: player.id, source });
+  }
+
+  function pickTab(next: Tab) {
+    if (next !== tab) {
+      trackEvent("tab_select", { league: league.slug, tab: next, from_tab: tab });
+    }
+    setTab(next);
   }
 
   function goPlayers() {
-    setTab("players");
+    pickTab("players");
     setActiveTeam(null);
   }
 
   function goTeams() {
-    setTab("teams");
+    pickTab("teams");
     setTeam("");
     setActiveTeam(null);
     setSearch("");
   }
 
   function goSchedule() {
-    setTab("schedule");
+    pickTab("schedule");
     setActiveTeam(null);
     setSearch("");
     setSelected(null);
   }
 
   function goCards() {
-    setTab("cards");
+    pickTab("cards");
     setActiveTeam(null);
     setSelectedGame(null);
   }
@@ -247,11 +271,22 @@ export default function App() {
     return list.map((item) => toTradingCard(item, season, data?.meta.teamLogos));
   }
 
-  function openTeam(name: string) {
+  function openTeam(name: string, source = "list") {
+    trackEvent("team_view", { league: league.slug, season, team_name: name, source });
     setTab("teams");
     setActiveTeam(name);
     setSearch("");
     setSelected(null);
+    setSelectedGame(null);
+  }
+
+  function closePlayerDrawer() {
+    trackDrawerClose("player", { league: league.slug, player_id: selected?.id ?? "" });
+    setSelected(null);
+  }
+
+  function closeGameDrawer() {
+    trackDrawerClose("game", { league: league.slug, game_id: selectedGame?.id ?? "" });
     setSelectedGame(null);
   }
 
@@ -288,7 +323,13 @@ export default function App() {
           {seasons.length > 1 && (
             <>
               <label className="field-label">SEASON</label>
-              <select value={season} onChange={(event) => setSeason(event.target.value)}>
+              <select
+                value={season}
+                onChange={(event) => {
+                  trackFilter("season", event.target.value, { league: league.slug, tab, season });
+                  setSeason(event.target.value);
+                }}
+              >
                 {seasons.map((item) => (
                   <option key={item.year} value={item.year}>
                     {item.label}
@@ -307,13 +348,25 @@ export default function App() {
               </label>
 
               <label className="field-label">TEAM</label>
-              <select value={team} onChange={(event) => setTeam(event.target.value)}>
+              <select
+                value={team}
+                onChange={(event) => {
+                  trackFilter("team", event.target.value || "all", { league: league.slug, tab, season });
+                  setTeam(event.target.value);
+                }}
+              >
                 <option value="">All teams</option>
                 {teams.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
 
               <label className="field-label">SORT BY</label>
-              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <select
+                value={sort}
+                onChange={(event) => {
+                  trackFilter("sort", event.target.value, { league: league.slug, tab, season });
+                  setSort(event.target.value);
+                }}
+              >
                 {sorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
               </select>
 
@@ -321,7 +374,7 @@ export default function App() {
                 <h3><Trophy size={16} /> Quick leaders</h3>
                 <span className="leader-category">{sortLabel}{team ? ` · ${team}` : ""}</span>
                 {leaders.map((player, index) => (
-                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player)}>
+                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player, "leader_row")}>
                     <span className="leader-rank">{index + 1}</span>
                     <span className="leader-name">{player.name}</span>
                     <strong>{statValue(player)}</strong>
@@ -342,7 +395,7 @@ export default function App() {
                 <h3><Trophy size={16} /> Team standings</h3>
                 <span className="leader-category">By wins</span>
                 {filteredTeams.slice(0, 8).map((item, index) => (
-                  <button className="leader-row" key={item.name} onClick={() => openTeam(item.name)}>
+                  <button className="leader-row" key={item.name} onClick={() => openTeam(item.name, "sidebar")}>
                     <span className="leader-rank">{index + 1}</span>
                     <span className="leader-name">
                       <TeamLogo name={item.name} src={item.logoUrl} className="team-logo-xs" />
@@ -367,14 +420,20 @@ export default function App() {
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roster…" />
               </label>
               <label className="field-label">SORT BY</label>
-              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <select
+                value={sort}
+                onChange={(event) => {
+                  trackFilter("sort", event.target.value, { league: league.slug, tab, season, team_name: activeTeam ?? "" });
+                  setSort(event.target.value);
+                }}
+              >
                 {sorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
               </select>
               <div className="leaders-block">
                 <h3><Trophy size={16} /> Team leaders</h3>
                 <span className="leader-category">{activeTeam}</span>
                 {leaders.map((player, index) => (
-                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player)}>
+                  <button className="leader-row" key={player.id} onClick={() => openPlayer(player, "leader_row")}>
                     <span className="leader-rank">{index + 1}</span>
                     <span className="leader-name">{player.name}</span>
                     <strong>{statValue(player)}</strong>
@@ -392,12 +451,25 @@ export default function App() {
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search matchups…" />
               </label>
               <label className="field-label">TEAM</label>
-              <select value={team} onChange={(event) => setTeam(event.target.value)}>
+              <select
+                value={team}
+                onChange={(event) => {
+                  trackFilter("team", event.target.value || "all", { league: league.slug, tab, season });
+                  setTeam(event.target.value);
+                }}
+              >
                 <option value="">All teams</option>
                 {teams.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
               <label className="field-label">SHOW</label>
-              <select value={scheduleView} onChange={(event) => setScheduleView(event.target.value as ScheduleView)}>
+              <select
+                value={scheduleView}
+                onChange={(event) => {
+                  const value = event.target.value as ScheduleView;
+                  trackFilter("schedule_view", value, { league: league.slug, tab, season });
+                  setScheduleView(value);
+                }}
+              >
                 <option value="all">Upcoming + results</option>
                 <option value="upcoming">Upcoming only</option>
                 <option value="results">Results only</option>
@@ -446,7 +518,14 @@ export default function App() {
               )}
               {tab === "teams" && activeTeam && (
                 <>
-                  <button type="button" className="back-link" onClick={() => setActiveTeam(null)}>
+                  <button
+                    type="button"
+                    className="back-link"
+                    onClick={() => {
+                      trackEvent("team_back", { league: league.slug, season, team_name: activeTeam });
+                      setActiveTeam(null);
+                    }}
+                  >
                     <ArrowLeft size={15} /> All teams
                   </button>
                   <h1 className="team-page-title">
@@ -481,7 +560,7 @@ export default function App() {
                 <button
                   type="button"
                   className="print-action"
-                  onClick={() => requestPrint(sheetForPlayers(players))}
+                  onClick={() => requestPrint(sheetForPlayers(players), { ...printCtx, source: "bulk" })}
                 >
                   <Printer size={15} />
                   Print {players.length} card{players.length === 1 ? "" : "s"}
@@ -517,7 +596,7 @@ export default function App() {
           {!loading && tab === "teams" && !activeTeam && (
             <div className="player-grid">
               {filteredTeams.map((item) => (
-                <TeamCard key={item.name} team={item} onSelect={openTeam} />
+                <TeamCard key={item.name} team={item} onSelect={(name) => openTeam(name, "grid")} />
               ))}
             </div>
           )}
@@ -535,7 +614,7 @@ export default function App() {
                   key={player.id}
                   player={player}
                   selected={selected?.id === player.id}
-                  onSelect={openPlayer}
+                  onSelect={(player) => openPlayer(player, tab === "cards" ? "card" : "player_card")}
                   teamLogos={data?.meta.teamLogos}
                 />
               ))}
@@ -549,7 +628,7 @@ export default function App() {
                   key={player.id}
                   card={toTradingCard(player, season, data?.meta.teamLogos)}
                   selected={selected?.id === player.id}
-                  onSelect={() => openPlayer(player)}
+                  onSelect={() => openPlayer(player, "card")}
                 />
               ))}
             </div>
@@ -569,7 +648,7 @@ export default function App() {
                   key={game.id}
                   game={game}
                   selected={selectedGame?.id === game.id}
-                  onSelect={openGame}
+                  onSelect={(game) => openGame(game, "schedule_list")}
                 />
               ))}
             </div>
@@ -587,8 +666,8 @@ export default function App() {
             game={selectedGame}
             season={season}
             players={rosterPlayers}
-            onClose={() => setSelectedGame(null)}
-            onSelectPlayer={openPlayer}
+            onClose={closeGameDrawer}
+            onSelectPlayer={(player) => openPlayer(player, "box_score")}
           />
         )}
 
@@ -597,9 +676,9 @@ export default function App() {
             player={selected}
             activeSeason={season}
             teamLogos={data?.meta.teamLogos}
-            onClose={() => setSelected(null)}
+            onClose={closePlayerDrawer}
             onSelectGame={openGameFromProfile}
-            onPrintCard={(card) => requestPrint([card])}
+            onPrintCard={(card) => requestPrint([card], { ...printCtx, source: "player_detail" })}
           />
         )}
       </div>

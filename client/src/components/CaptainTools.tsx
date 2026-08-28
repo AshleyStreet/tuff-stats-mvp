@@ -16,12 +16,15 @@ import {
 } from "../lib/cardStats";
 import { loadCaptainSession, saveCaptainSession } from "../lib/captainSession";
 import { filterAndSortPlayers } from "../lib/query";
+import { trackClick, trackDrawerClose, trackEvent, trackFilter, trackPageView } from "../lib/analytics";
+import { useDebouncedSearchTrack } from "../lib/useDebouncedSearchTrack";
 import { usePrintCards } from "../lib/usePrintCards";
 import type { Player, PlayersResponse, SeasonInfo } from "../types";
 import { PrintSheet } from "./PrintSheet";
 import { TradingCard } from "./TradingCard";
 
 function goLeague() {
+  trackClick("league_stats", { from: "captain_tools" });
   window.location.assign("/");
 }
 
@@ -42,6 +45,13 @@ export function CaptainTools() {
   const [notes, setNotes] = useState<Record<string, string>>(stored.notes);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { printCards, requestPrint } = usePrintCards();
+  const printCtx = { league: league.slug, season, tab: "captain_tools" };
+
+  useDebouncedSearchTrack(search, league.slug, "captain_tools", season, Boolean(search.trim()));
+
+  useEffect(() => {
+    trackPageView("/captain-tools", `${league.name} · Captain tools`);
+  }, [league.name]);
 
   useEffect(() => {
     getSeasons()
@@ -157,6 +167,21 @@ export function CaptainTools() {
     setNotes({});
   }
 
+  function toggleCard(player: Player) {
+    const opening = player.id !== selectedId;
+    trackEvent("captain_card_select", {
+      league: league.slug,
+      player_id: player.id,
+      action: opening ? "open" : "close"
+    });
+    setSelectedId(opening ? player.id : null);
+  }
+
+  function closeEditor() {
+    trackDrawerClose("captain_editor", { league: league.slug, player_id: selectedId ?? "" });
+    setSelectedId(null);
+  }
+
   function setPlayerNote(playerId: string, value: string) {
     setNotes((current) => {
       if (!value.trim()) {
@@ -182,7 +207,13 @@ export function CaptainTools() {
           </nav>
           <label className="season-pill">
             <span className="season-pill-label">Season</span>
-            <select value={season} onChange={(event) => setSeason(event.target.value)}>
+            <select
+              value={season}
+              onChange={(event) => {
+                trackFilter("season", event.target.value, { league: league.slug, tab: "captain_tools", season });
+                setSeason(event.target.value);
+              }}
+            >
               {(seasons.length ? seasons : [{ year: season, label: `${season} Season` }]).map((item) => (
                 <option key={item.year} value={item.year}>
                   {item.year}
@@ -200,7 +231,13 @@ export function CaptainTools() {
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players…" />
             </label>
             <label className="field-label">Team</label>
-            <select value={team} onChange={(event) => setTeam(event.target.value)}>
+            <select
+              value={team}
+              onChange={(event) => {
+                trackFilter("team", event.target.value || "all", { league: league.slug, tab: "captain_tools", season });
+                setTeam(event.target.value);
+              }}
+            >
               <option value="">All teams</option>
               {(data?.meta.teams ?? []).map((name) => (
                 <option key={name} value={name}>
@@ -220,7 +257,14 @@ export function CaptainTools() {
               <div className="captain-slot" key={`slot-${index}`}>
                 <label>
                   Slot {index + 1}
-                  <select value={slot.key} onChange={(event) => setSlotKey(index, event.target.value as SlotKey)}>
+                  <select
+                    value={slot.key}
+                    onChange={(event) => {
+                      const key = event.target.value as SlotKey;
+                      trackEvent("captain_slot_change", { league: league.slug, slot_index: index + 1, stat_key: key });
+                      setSlotKey(index, key);
+                    }}
+                  >
                     <option value="custom">Custom / write-in</option>
                     {presentation.cardOptions.map((option) => (
                       <option key={option.key} value={option.key}>
@@ -248,10 +292,24 @@ export function CaptainTools() {
               </div>
             ))}
             <div className="captain-slot-actions">
-              <button type="button" className="text-action" onClick={() => setSlots(defaultSlots(presentation.cardDefaults))}>
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  trackEvent("captain_slots_reset", { league: league.slug, mode: "default" });
+                  setSlots(defaultSlots(presentation.cardDefaults));
+                }}
+              >
                 <RotateCcw size={14} /> Default stats
               </button>
-              <button type="button" className="text-action" onClick={() => setSlots(emptySlots())}>
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  trackEvent("captain_slots_reset", { league: league.slug, mode: "blank" });
+                  setSlots(emptySlots());
+                }}
+              >
                 Blank write-in
               </button>
             </div>
@@ -285,12 +343,15 @@ export function CaptainTools() {
               </div>
               <div className="heading-actions">
                 {(Object.keys(overrides).length > 0 || Object.keys(notes).length > 0) && (
-                  <button type="button" className="text-action" onClick={clearPlayerEdits}>
+                  <button type="button" className="text-action" onClick={() => {
+                    trackEvent("captain_edits_clear", { league: league.slug, scope: "all" });
+                    clearPlayerEdits();
+                  }}>
                     Clear player edits
                   </button>
                 )}
                 {players.length > 0 && (
-                  <button type="button" className="print-action" onClick={() => requestPrint(players.map(cardFor))}>
+                  <button type="button" className="print-action" onClick={() => requestPrint(players.map(cardFor), { ...printCtx, source: "captain_bulk" })}>
                     <Printer size={15} />
                     Print {players.length === 1 ? "1 card" : `${players.length} cards`}
                   </button>
@@ -312,7 +373,7 @@ export function CaptainTools() {
                     key={player.id}
                     card={cardFor(player)}
                     selected={selected?.id === player.id}
-                    onSelect={() => setSelectedId(player.id === selectedId ? null : player.id)}
+                    onSelect={() => toggleCard(player)}
                   />
                 ))}
               </div>
@@ -327,7 +388,7 @@ export function CaptainTools() {
 
           {selected && (
             <aside className="detail-panel captain-editor">
-              <button type="button" className="icon-button close" onClick={() => setSelectedId(null)} aria-label="Close">
+              <button type="button" className="icon-button close" onClick={closeEditor} aria-label="Close">
                 <X size={20} />
               </button>
               <div className="eyebrow">Write-in</div>
@@ -366,13 +427,20 @@ export function CaptainTools() {
                   </div>
                 );
               })}
-              <button type="button" className="text-action" onClick={() => clearPlayer(selected.id)}>
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  trackEvent("captain_edits_clear", { league: league.slug, scope: "player", player_id: selected.id });
+                  clearPlayer(selected.id);
+                }}
+              >
                 <RotateCcw size={14} /> Reset this player
               </button>
               <button
                 type="button"
                 className="print-action detail-print"
-                onClick={() => requestPrint([cardFor(selected)])}
+                onClick={() => requestPrint([cardFor(selected)], { ...printCtx, source: "captain_single" })}
               >
                 <Printer size={14} /> Print this card
               </button>
