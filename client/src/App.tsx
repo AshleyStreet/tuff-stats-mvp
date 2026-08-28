@@ -3,7 +3,7 @@ import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
 import { BrandMark } from "./league/BrandMark";
 import { useLeague, usePresentation } from "./league/LeagueProvider";
 import { readStat } from "./league/readStat";
-import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers, peekSeasons } from "./api";
+import { formatUpdatedAt, getPlayers, getSchedule, getSeasons, peekSeasonPlayers, peekSeasons, playersCacheReady } from "./api";
 import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
@@ -41,7 +41,10 @@ export default function App() {
   const [sort, setSort] = useState(sorts[0]?.key ?? "totalPoints");
   const [selected, setSelected] = useState<Player | null>(null);
   const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
-  const [loading, setLoading] = useState(() => !peekSeasonPlayers(bootSeasons?.defaultSeason ?? league.publicSeason)?.meta.standings?.length);
+  const [loading, setLoading] = useState(() => {
+    const boot = peekSeasonPlayers(bootSeasons?.defaultSeason ?? league.publicSeason);
+    return !boot?.meta.standings?.length || !playersCacheReady(boot);
+  });
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
@@ -96,7 +99,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const cached = peekSeasonPlayers(season);
-    if (cached?.meta.standings?.length) {
+    if (cached?.meta.standings?.length && playersCacheReady(cached)) {
       setData(cached);
       setLoading(false);
       setError(null);
