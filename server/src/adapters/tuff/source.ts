@@ -921,7 +921,7 @@ export async function getPlayers(
   // HTML bootstrap: serve a warm snapshot only — never block on upstream APIs.
   if (!force && cacheOnly) {
     if (!cached) throw new Error("Season cache miss");
-    return withPlayersLeague(cached.data);
+    return withPlayersLeague(attachTeamLogosSync(cached.data));
   }
 
   // Career / warm-path reads: trust memory/disk snapshots; skip SportsPress fingerprint chatter.
@@ -943,8 +943,9 @@ export async function getPlayers(
   try {
     const data = await fetchSeasonPlayers(season);
     const fingerprint = liveFingerprint ?? (await getSeasonFingerprint(season)) ?? `fetched:${data.meta.fetchedAt}`;
-    writeSeasonCache(season.year, fingerprint, data);
-    return finishPlayers(data);
+    const finished = await finishPlayers(data);
+    writeSeasonCache(season.year, fingerprint, finished);
+    return finished;
   } catch (error) {
     if (cached) return finishPlayers(cached.data);
     throw error;
@@ -961,6 +962,7 @@ export async function warmSeasonCaches(): Promise<{ warmed: string[]; failed: st
   };
 
   try {
+    await loadTeamCatalog().catch(() => null);
     const seasons = await getSeasons();
     const warmed: string[] = [];
     const failed: string[] = [];
@@ -1135,8 +1137,17 @@ function logosByCanonicalName(names: Map<number, string>, logos: Map<number, str
   return out;
 }
 
-async function attachTeamLogos(data: PlayersResponse): Promise<PlayersResponse> {
+function attachTeamLogosSync(data: PlayersResponse): PlayersResponse {
   if (data.meta.teamLogos && Object.keys(data.meta.teamLogos).length) return data;
+  if (!teamCatalogMemory?.names.size) return data;
+  const teamLogos = logosByCanonicalName(teamCatalogMemory.names, teamCatalogMemory.logos);
+  if (!Object.keys(teamLogos).length) return data;
+  return { ...data, meta: { ...data.meta, teamLogos } };
+}
+
+async function attachTeamLogos(data: PlayersResponse): Promise<PlayersResponse> {
+  const synced = attachTeamLogosSync(data);
+  if (synced.meta.teamLogos && Object.keys(synced.meta.teamLogos).length) return synced;
   const catalog = await loadTeamCatalog();
   const teamLogos = logosByCanonicalName(catalog.names, catalog.logos);
   if (!Object.keys(teamLogos).length) return data;
