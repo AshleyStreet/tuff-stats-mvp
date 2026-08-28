@@ -9,12 +9,10 @@ import { isMarketingHost } from "./lib/marketingHost";
 import { initAnalytics, trackPageView } from "./lib/analytics";
 import "./styles.css";
 
+initAnalytics();
+
 function Root() {
   const [path, setPath] = useState(() => window.location.pathname);
-
-  useEffect(() => {
-    initAnalytics();
-  }, []);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
