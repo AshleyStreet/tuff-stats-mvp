@@ -11,7 +11,7 @@ import { resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
-import { injectPageBootstrap } from "./lib/pageBootstrap.js";
+import { injectPageBootstrap, type PageBootstrap } from "./lib/pageBootstrap.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -282,15 +282,34 @@ function sendAdminError(res: express.Response, error: unknown) {
 }
 
 async function buildBootstrappedHtml(indexTemplate: string, league: League, adapter: LeagueDataAdapter) {
-  const seasons = await adapter.getSeasons();
+  const payload = await Promise.race([
+    loadBootstrapPayload(league, adapter),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), BOOTSTRAP_TIMEOUT_MS))
+  ]);
+  if (!payload) return indexTemplate;
+  return injectPageBootstrap(indexTemplate, payload);
+}
+
+const BOOTSTRAP_TIMEOUT_MS = 300;
+
+async function loadBootstrapPayload(league: League, adapter: LeagueDataAdapter): Promise<PageBootstrap | null> {
+  const seasons = await adapter.getSeasons({ cacheOnly: true });
+  if (!seasons.length) return null;
+
   const publicSeason = league.publicSeason;
   const defaultSeason = seasons.some((item) => item.year === publicSeason)
     ? publicSeason
     : (seasons[0]?.year ?? publicSeason);
-  const players = await adapter.getPlayers({ season: defaultSeason });
-  return injectPageBootstrap(indexTemplate, {
-    league: toPublicLeague(league),
-    seasons: { seasons, defaultSeason },
-    players
-  });
+
+  try {
+    const players = await adapter.getPlayers({ season: defaultSeason, cacheOnly: true });
+    if (!players.players.length) return null;
+    return {
+      league: toPublicLeague(league),
+      seasons: { seasons, defaultSeason },
+      players
+    };
+  } catch {
+    return null;
+  }
 }

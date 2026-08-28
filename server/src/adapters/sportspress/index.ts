@@ -235,13 +235,14 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
   }
 
   async function getSeasons(opts?: AdapterFetchOpts): Promise<SeasonInfo[]> {
-    if (!opts?.force && opts?.preferCache) {
+    if (!opts?.force && (opts?.preferCache || opts?.cacheOnly)) {
       if (seasonsMemory?.seasons.length) return seasonsMemory.seasons;
       const disk = readDisk<SeasonInfo[]>("seasons.json");
       if (disk?.payload?.length) {
         seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
         return disk.payload;
       }
+      if (opts?.cacheOnly) return [];
     }
 
     if (!opts?.force && seasonsMemory?.seasons.length) return seasonsMemory.seasons;
@@ -481,7 +482,7 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
 
   async function getPlayers(opts?: AdapterFetchOpts): Promise<PlayersResponse> {
     const key = seasonKey(opts?.season);
-    if (!opts?.force && opts?.preferCache) {
+    if (!opts?.force && (opts?.preferCache || opts?.cacheOnly)) {
       const memory = playersCache.get(key);
       if (memory) return memory;
       const disk = readDisk<PlayersResponse>(`season-${key}.json`);
@@ -489,6 +490,7 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
         playersCache.set(key, disk.payload);
         return disk.payload;
       }
+      if (opts?.cacheOnly) throw new Error("Season cache miss");
     }
 
     const slice = sliceFor(key);
