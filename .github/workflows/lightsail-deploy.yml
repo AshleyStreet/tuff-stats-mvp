@@ -19,5 +19,5 @@ jobs:
             sudo git fetch origin
             sudo git checkout main
             sudo git pull --ff-only origin main
-            sudo docker compose up -d --build
+            sudo docker compose --env-file deploy/lightsail/.env up -d --build
             curl -fsS --retry 8 --retry-delay 5 http://127.0.0.1/api/health

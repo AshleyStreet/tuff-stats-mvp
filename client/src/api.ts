@@ -3,6 +3,31 @@ import type { PublicLeague } from "./league/types";
 
 let leagueCache: PublicLeague | null = null;
 let leagueInflight: Promise<PublicLeague> | null = null;
+let seasonsCache: { seasons: SeasonInfo[]; defaultSeason: string; league?: LeagueRef } | null = null;
+
+export function peekLeague() {
+  return leagueCache;
+}
+
+export function peekSeasons() {
+  return seasonsCache;
+}
+
+export function seedBootstrap(payload: {
+  league: PublicLeague;
+  seasons: { seasons: SeasonInfo[]; defaultSeason: string };
+  players?: PlayersResponse;
+}) {
+  leagueCache = payload.league;
+  seasonsCache = { seasons: payload.seasons.seasons, defaultSeason: payload.seasons.defaultSeason };
+  if (payload.players) {
+    const season = payload.seasons.defaultSeason || payload.league.publicSeason;
+    seasonPlayersCache.set(cacheKey("players", season), payload.players);
+    if (!season) {
+      seasonPlayersCache.set(cacheKey("players", "default"), payload.players);
+    }
+  }
+}
 
 function tenantKey() {
   return leagueCache?.slug ?? "tuff";
@@ -41,12 +66,16 @@ const scheduleCache = new Map<string, ScheduleResponse>();
 const scheduleInflight = new Map<string, Promise<ScheduleResponse>>();
 
 export async function getSeasons() {
+  if (seasonsCache) return seasonsCache;
+
   const response = await fetch("/api/seasons");
   if (!response.ok) {
     const error = await response.json().catch(() => null);
     throw new Error(error?.detail ?? "Could not load seasons");
   }
-  return response.json() as Promise<{ seasons: SeasonInfo[]; defaultSeason: string; league?: LeagueRef }>;
+  const data = (await response.json()) as { seasons: SeasonInfo[]; defaultSeason: string; league?: LeagueRef };
+  seasonsCache = data;
+  return data;
 }
 
 export async function getPlayers(season = "", options: { bypassCache?: boolean } = {}) {
