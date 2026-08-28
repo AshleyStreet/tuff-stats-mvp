@@ -1,5 +1,5 @@
-import { initials, splitPlayerName, type CardStatLine, type TradingCardData } from "../lib/cards";
-import { useLeague, usePresentation } from "../league/LeagueProvider";
+import { initials, type CardStatLine, type TradingCardData } from "../lib/cards";
+import { usePresentation } from "../league/LeagueProvider";
 import { readStat } from "../league/readStat";
 import { TeamLogo } from "./TeamLogo";
 
@@ -9,57 +9,53 @@ interface Props {
   onSelect?: () => void;
 }
 
+const FACE_STATS = 3;
+
 export function TradingCard({ card, selected, onSelect }: Props) {
-  const league = useLeague();
   const presentation = usePresentation();
-  const { first, last } = splitPlayerName(card.name);
   const jersey = card.number != null && String(card.number).trim() ? String(card.number).trim() : "";
   const className = `trading-card${selected ? " selected" : ""}${onSelect ? " interactive" : ""}`;
   const fallbackLine: CardStatLine[] = presentation.cardDefaults.map((column) => ({
     label: column.short,
     value: String(readStat(card, column.key))
   }));
-  const stats = card.lineItems?.length ? card.lineItems : fallbackLine;
+  const stats = (card.lineItems?.length ? card.lineItems : fallbackLine).slice(0, FACE_STATS);
+  const displayName = card.name.trim().toUpperCase();
+
   const face = (
     <div className="trading-card-face">
-      <div className="tc-banner">
-        <span>{league.shortName}</span>
-        <span>{card.season}</span>
-      </div>
+      <div className="tc-frame">
+        {jersey ? <span className="tc-num">{jersey}</span> : null}
 
-      <div className="tc-art">
-        <TeamLogo
-          name={card.team || card.name}
-          src={card.logoUrl}
-          className="tc-logo"
-          fallback={initials(card.name)}
-        />
-        {jersey ? <span className="tc-jersey">#{jersey}</span> : null}
-      </div>
+        <div className="tc-hero">
+          {card.photoUrl ? (
+            <img className="tc-photo" src={card.photoUrl} alt="" />
+          ) : (
+            <div className="tc-hero-fallback" aria-hidden="true">
+              <TeamLogo
+                name={card.team || card.name}
+                src={card.logoUrl}
+                className="tc-hero-logo"
+                fallback={initials(card.name)}
+              />
+            </div>
+          )}
+          <div className="tc-hero-shade" aria-hidden="true" />
+        </div>
 
-      <div className="tc-identity">
-        {first ? <span className="tc-first">{first}</span> : null}
-        <strong className="tc-last">{last}</strong>
-        {card.note != null ? (
-          <span className={`tc-note${card.note.trim() ? " has-text" : ""}`}>
-            {card.note.trim() || "\u00a0"}
-          </span>
-        ) : null}
-        <span className="tc-team">{card.team || "Free agent"}</span>
-      </div>
+        <div className="tc-nameplate">
+          <strong className="tc-name">{displayName}</strong>
+          {card.note?.trim() ? <span className="tc-note">{card.note.trim()}</span> : null}
+        </div>
 
-      <div className="tc-stats">
-        {stats.map((item, index) => (
-          <div key={`${item.label}-${index}`}>
-            <span>{item.label || "\u00a0"}</span>
-            <strong>{item.value || "\u00a0"}</strong>
-          </div>
-        ))}
-      </div>
-
-      <div className="tc-footer">
-        <span>{league.name}</span>
-        <span>{readStat(card, "gms")} GP</span>
+        <div className="tc-statbar">
+          {stats.map((item, index) => (
+            <div key={`${item.label}-${index}`} className="tc-stat">
+              <span>{item.label || "\u00a0"}</span>
+              <strong>{item.value || "\u00a0"}</strong>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

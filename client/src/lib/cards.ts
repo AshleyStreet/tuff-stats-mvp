@@ -15,6 +15,7 @@ export type TradingCardData = {
   stats: Stats;
   derived: Player["derived"];
   logoUrl?: string;
+  photoUrl?: string;
   lineItems?: CardStatLine[];
   note?: string;
 };
@@ -37,18 +38,25 @@ export function toTradingCard(
   player: Player,
   season: string,
   teamLogos?: Record<string, string>,
-  extras: Partial<Pick<TradingCardData, "number" | "name" | "team" | "stats" | "derived" | "lineItems" | "note">> = {}
+  extras: Partial<
+    Pick<
+      TradingCardData,
+      "number" | "name" | "team" | "stats" | "derived" | "lineItems" | "note" | "photoUrl"
+    >
+  > = {}
 ): TradingCardData {
   const team = extras.team ?? player.team;
+  const stats = extras.stats ?? player.stats;
   return {
     id: player.id,
     name: extras.name ?? player.name,
     team,
     number: extras.number,
     season,
-    stats: extras.stats ?? player.stats,
+    stats,
     derived: extras.derived ?? player.derived,
     logoUrl: teamLogoUrl(team, teamLogos),
+    photoUrl: extras.photoUrl,
     lineItems: extras.lineItems,
     note: extras.note
   };

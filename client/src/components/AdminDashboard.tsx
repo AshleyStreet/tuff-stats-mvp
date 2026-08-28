@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, ExternalLink, Plus, Radar, Save } from "lucide-react";
 import type { AdminTenant, LeagueBranding, LeagueCopy, SourceProbeResult } from "../league/types";
+import { trackClick, trackEvent, trackExternalLink } from "../lib/analytics";
 
 const TOKEN_KEY = "admin-token";
 
@@ -122,6 +123,7 @@ function payloadFromDraft(
 }
 
 function goLeague() {
+  trackClick("league_stats", { from: "admin" });
   window.location.assign("/");
 }
 
@@ -193,10 +195,12 @@ export function AdminDashboard() {
     const next = tokenInput.trim();
     sessionStorage.setItem(TOKEN_KEY, next);
     setToken(next);
+    trackEvent("admin_sign_in", { success: true });
     void loadTenants(next);
   }
 
   function selectTenant(tenant: AdminTenant) {
+    trackEvent("admin_tenant_select", { tenant_slug: tenant.slug });
     setSelectedSlug(tenant.slug);
     setDraft(toDraft(tenant));
     setNotice(null);
@@ -204,6 +208,7 @@ export function AdminDashboard() {
   }
 
   function startCreate() {
+    trackEvent("admin_tenant_create_start", {});
     setSelectedSlug("new");
     setDraft({
       ...emptyDraft,
@@ -233,6 +238,11 @@ export function AdminDashboard() {
       if (!response.ok || !body?.probe) throw new Error(body?.error ?? "Could not probe that URL");
       const result = body.probe;
       setProbe(result);
+      trackEvent("admin_probe", {
+        success: true,
+        adapter: result.adapter,
+        sportspress_live: result.sportspressLive
+      });
       setDraft((current) => ({
         ...current,
         slug: current.slug.trim() || result.suggestedSlug,
@@ -252,6 +262,7 @@ export function AdminDashboard() {
             : "No SportsPress detected — fixture demo tenant."
       );
     } catch (err) {
+      trackEvent("admin_probe", { success: false });
       setError(err instanceof Error ? err.message : "Probe failed");
     } finally {
       setProbing(false);
@@ -282,6 +293,7 @@ export function AdminDashboard() {
       });
       setSelectedSlug(saved.slug);
       setDraft(toDraft(saved));
+      trackEvent("admin_tenant_save", { tenant_slug: saved.slug, creating });
       setNotice("Saved. Open the tenant host to see it live.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -429,7 +441,15 @@ export function AdminDashboard() {
                 </div>
               </div>
               {draft.hostnames.trim() ? (
-                <a className="admin-open" href={tenantOrigin(draft.hostnames.split(/[\n,]/)[0]!.trim())} target="_blank" rel="noreferrer">
+                <a
+                  className="admin-open"
+                  href={tenantOrigin(draft.hostnames.split(/[\n,]/)[0]!.trim())}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() =>
+                    trackExternalLink("admin_tenant", { tenant_slug: draft.slug || selectedSlug || "" })
+                  }
+                >
                   Open this host <ExternalLink size={14} />
                 </a>
               ) : null}

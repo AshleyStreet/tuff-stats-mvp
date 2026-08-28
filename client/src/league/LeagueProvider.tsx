@@ -29,6 +29,21 @@ function withPresentationDefaults(league: PublicLeague): PublicLeague {
   };
 }
 
+/** Static league context for marketing previews — no API fetch. */
+export function LeaguePreviewProvider({
+  league,
+  children
+}: {
+  league: PublicLeague;
+  children: ReactNode;
+}) {
+  return (
+    <LeagueContext.Provider value={withPresentationDefaults(league)}>
+      {children}
+    </LeagueContext.Provider>
+  );
+}
+
 export function LeagueProvider({ children }: { children: ReactNode }) {
   const [league, setLeague] = useState<PublicLeague>(tuffPublicLeague);
 

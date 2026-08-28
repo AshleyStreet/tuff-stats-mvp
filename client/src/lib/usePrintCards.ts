@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { TradingCardData } from "./cards";
+import { trackEvent, type AnalyticsProps } from "./analytics";
 
 export function usePrintCards() {
   const [printCards, setPrintCards] = useState<TradingCardData[] | null>(null);
 
-  function requestPrint(cards: TradingCardData[]) {
+  function requestPrint(cards: TradingCardData[], context: AnalyticsProps = {}) {
     if (!cards.length) return;
+    trackEvent("print_cards", { count: cards.length, ...context });
     setPrintCards(cards);
   }
 
