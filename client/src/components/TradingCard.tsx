@@ -1,4 +1,4 @@
-import { initials, type CardStatLine, type TradingCardData } from "../lib/cards";
+import { initials, visibleCardStats, type CardStatLine, type TradingCardData } from "../lib/cards";
 import { usePresentation } from "../league/LeagueProvider";
 import { readStat } from "../league/readStat";
 import { TeamLogo } from "./TeamLogo";
@@ -9,8 +9,6 @@ interface Props {
   onSelect?: () => void;
 }
 
-const FACE_STATS = 3;
-
 export function TradingCard({ card, selected, onSelect }: Props) {
   const presentation = usePresentation();
   const jersey = card.number != null && String(card.number).trim() ? String(card.number).trim() : "";
@@ -19,7 +17,7 @@ export function TradingCard({ card, selected, onSelect }: Props) {
     label: column.short,
     value: String(readStat(card, column.key))
   }));
-  const stats = (card.lineItems?.length ? card.lineItems : fallbackLine).slice(0, FACE_STATS);
+  const stats = visibleCardStats(card.lineItems?.length ? card.lineItems : fallbackLine);
   const displayName = card.name.trim().toUpperCase();
 
   const face = (
@@ -48,14 +46,20 @@ export function TradingCard({ card, selected, onSelect }: Props) {
           {card.note?.trim() ? <span className="tc-note">{card.note.trim()}</span> : null}
         </div>
 
-        <div className="tc-statbar">
-          {stats.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="tc-stat">
-              <span>{item.label || "\u00a0"}</span>
-              <strong>{item.value || "\u00a0"}</strong>
-            </div>
-          ))}
-        </div>
+        {stats.length > 0 ? (
+          <div
+            className="tc-statbar"
+            data-cols={stats.length}
+            style={{ ["--tc-stat-cols" as string]: stats.length }}
+          >
+            {stats.map((item, index) => (
+              <div key={`${item.label}-${index}`} className="tc-stat">
+                <span>{item.label || "\u00a0"}</span>
+                <strong>{item.value || "\u00a0"}</strong>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

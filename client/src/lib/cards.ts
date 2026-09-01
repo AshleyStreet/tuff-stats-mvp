@@ -1,10 +1,23 @@
 import { teamLogoUrl } from "./teams";
 import type { Player, Stats } from "../types";
 
+export const CARD_FACE_SLOTS = 5;
+
 export type CardStatLine = {
   label: string;
   value: string;
 };
+
+export function isFilledStatLine(item: CardStatLine) {
+  return Boolean(item.label.trim() || item.value.trim());
+}
+
+/** Drop unused write-in slots so the face matches the sidebar; keep blanks when every slot is empty. */
+export function visibleCardStats(items: CardStatLine[]): CardStatLine[] {
+  const capped = items.slice(0, CARD_FACE_SLOTS);
+  const filled = capped.filter(isFilledStatLine);
+  return filled.length ? filled : capped;
+}
 
 export type TradingCardData = {
   id: string;

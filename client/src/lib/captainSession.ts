@@ -11,7 +11,13 @@ export type CaptainSession = {
   overrides: Record<string, PlayerOverrides>;
   defaultNote: string;
   notes: Record<string, string>;
+  photos: Record<string, string>;
 };
+
+function isPhotoMap(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value).every((item) => typeof item === "string" && item.startsWith("data:image/"));
+}
 
 function isSlot(value: unknown): value is StatSlot {
   if (!value || typeof value !== "object") return false;
@@ -25,7 +31,7 @@ function migrateSlot(slot: StatSlot): StatSlot {
 }
 
 export function emptyCaptainSession(): CaptainSession {
-  return { slots: defaultSlots(), overrides: {}, defaultNote: "", notes: {} };
+  return { slots: defaultSlots(), overrides: {}, defaultNote: "", notes: {}, photos: {} };
 }
 
 export function loadCaptainSession(slug = "tuff"): CaptainSession {
@@ -39,17 +45,25 @@ export function loadCaptainSession(slug = "tuff"): CaptainSession {
       slots: slots.length === 5 ? slots : defaultSlots(),
       overrides: parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {},
       defaultNote: typeof parsed.defaultNote === "string" ? parsed.defaultNote : "",
-      notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {}
+      notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
+      photos: isPhotoMap(parsed.photos) ? parsed.photos : {}
     };
   } catch {
     return emptyCaptainSession();
   }
 }
 
-export function saveCaptainSession(session: CaptainSession, slug = "tuff") {
+export function saveCaptainSession(session: CaptainSession, slug = "tuff"): "ok" | "photos-skipped" {
+  const key = captainStorageKey(slug);
   try {
-    sessionStorage.setItem(captainStorageKey(slug), JSON.stringify(session));
+    sessionStorage.setItem(key, JSON.stringify(session));
+    return "ok";
   } catch {
-    /* private mode / quota — keep working in memory */
+    try {
+      sessionStorage.setItem(key, JSON.stringify({ ...session, photos: {} }));
+      return "photos-skipped";
+    } catch {
+      return "photos-skipped";
+    }
   }
 }

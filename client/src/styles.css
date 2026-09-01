@@ -588,6 +588,26 @@ div.team-logo-md { font-size: 10px; }
   white-space: nowrap;
 }
 
+.app-foot {
+  padding: 18px 36px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  background: linear-gradient(180deg, rgba(7, 7, 7, 0.4), rgba(7, 7, 7, 0.95));
+}
+
+.app-foot a {
+  color: #8a8c8f;
+  font: 600 11px "Barlow Condensed";
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.app-foot a:hover {
+  color: #d0d2d5;
+}
+
 .player-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(230px, 1fr));
@@ -1363,7 +1383,7 @@ div.tc-hero-logo {
 
 .tc-statbar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--tc-stat-cols, 3), minmax(0, 1fr));
   gap: 0;
   background: linear-gradient(180deg, #121212, #080808);
   border-top: 1px solid rgba(227, 27, 35, 0.45);
@@ -1371,6 +1391,7 @@ div.tc-hero-logo {
 
 .tc-stat {
   position: relative;
+  min-width: 0;
   padding: 6px 4px 7px;
   text-align: center;
 }
@@ -1392,6 +1413,9 @@ div.tc-hero-logo {
   font: 700 8px "Barlow Condensed", sans-serif;
   letter-spacing: 1px;
   text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tc-stat strong {
@@ -1494,6 +1518,11 @@ div.tc-hero-logo {
   cursor: pointer;
 }
 .text-action:hover { color: white; }
+.text-action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.text-action:disabled:hover { color: var(--gold); }
 .captain-editor h2 {
   margin: 8px 0 0;
   font: italic 800 32px/1 "Barlow Condensed";
@@ -1504,6 +1533,28 @@ div.tc-hero-logo {
   max-width: 220px;
 }
 .captain-editor .field-label { margin-top: 16px; }
+.tc-statbar[data-cols="4"] .tc-stat,
+.tc-statbar[data-cols="5"] .tc-stat {
+  padding: 6px 2px 7px;
+}
+.tc-statbar[data-cols="4"] .tc-stat span,
+.tc-statbar[data-cols="5"] .tc-stat span {
+  font-size: 7px;
+  letter-spacing: 0.4px;
+}
+.tc-statbar[data-cols="5"] .tc-stat strong {
+  font-size: clamp(13px, 5cqw, 18px);
+}
+
+.captain-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 4px;
+}
+.captain-photo-error {
+  color: #ffcc80;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .football,
@@ -1545,6 +1596,7 @@ div.tc-hero-logo {
   .leaders-block { display: none; }
   .field-label { margin-top: 0; align-self: end; }
   main { padding: 28px 18px; }
+  .app-foot { padding: 16px 18px 22px; }
   .detail-panel { top: 0; width: min(400px, 100vw); z-index: 30; }
   .app-shell.detail-open main,
   .app-shell.detail-open .sidebar { opacity: 1; }
