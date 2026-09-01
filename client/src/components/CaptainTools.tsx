@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ImagePlus, Pin, Printer, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, Download, ImagePlus, Pin, Printer, RotateCcw, Search, X } from "lucide-react";
 import { getPlayers, getSeasons, peekSeasonPlayers } from "../api";
 import { BrandMark } from "../league/BrandMark";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
@@ -17,6 +17,7 @@ import {
   type SlotOverride,
   type StatSlot
 } from "../lib/cardStats";
+import { cardDownloadName, downloadCardPng } from "../lib/cardExport";
 import { readCardPhoto } from "../lib/cardPhoto";
 import {
   CARD_TEMPLATES,
@@ -76,7 +77,10 @@ export function CaptainTools() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const exportCardRef = useRef<HTMLDivElement>(null);
   const { printCards, requestPrint } = usePrintCards();
   const printCtx = { league: league.slug, season, tab: "captain_tools" };
   const activeTemplate = cardTemplate(template);
@@ -384,11 +388,13 @@ export function CaptainTools() {
       player_id: player.id,
       action: opening ? "open" : "close"
     });
+    setExportError(null);
     setSelectedId(opening ? player.id : null);
   }
 
   function closeEditor() {
     trackDrawerClose("captain_editor", { league: league.slug, player_id: selectedId ?? "" });
+    setExportError(null);
     setSelectedId(null);
   }
 
@@ -411,6 +417,29 @@ export function CaptainTools() {
       }
       return { ...current, [playerId]: jersey };
     });
+  }
+
+  async function downloadSelectedPng(player: Player) {
+    const cardNode = exportCardRef.current?.querySelector<HTMLElement>(".trading-card");
+    if (!cardNode) {
+      setExportError("Couldn't find that card to download.");
+      return;
+    }
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const card = cardFor(player);
+      await downloadCardPng(cardNode, cardDownloadName(card));
+      trackEvent("captain_card_png", { league: league.slug, player_id: player.id, season });
+    } catch (err) {
+      setExportError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't download that card as a PNG. Try again, or remove the photo if it still fails."
+      );
+    } finally {
+      setExportBusy(false);
+    }
   }
 
   const colorTarget = colorTeam || team;
@@ -751,13 +780,15 @@ export function CaptainTools() {
               <p className="captain-hint">
                 Leave a field blank to keep the preset. Photo and edits stay in this tab only.
               </p>
-              <PhotoPositionStage
-                enabled={Boolean(photos[selected.id])}
-                position={normalizePhotoPosition(photoPositions[selected.id] ?? DEFAULT_PHOTO_POSITION)}
-                onChange={(position) => setPhotoPosition(selected.id, position)}
-              >
-                <TradingCard card={cardFor(selected)} />
-              </PhotoPositionStage>
+              <div ref={exportCardRef}>
+                <PhotoPositionStage
+                  enabled={Boolean(photos[selected.id])}
+                  position={normalizePhotoPosition(photoPositions[selected.id] ?? DEFAULT_PHOTO_POSITION)}
+                  onChange={(position) => setPhotoPosition(selected.id, position)}
+                >
+                  <TradingCard card={cardFor(selected)} />
+                </PhotoPositionStage>
+              </div>
               <div className="captain-photo-actions" style={{ marginTop: 10 }}>
                 <button
                   type="button"
@@ -853,13 +884,24 @@ export function CaptainTools() {
               >
                 <RotateCcw size={14} /> Reset this player
               </button>
-              <button
-                type="button"
-                className="print-action detail-print"
-                onClick={() => requestPrint([cardFor(selected)], { ...printCtx, source: "captain_single" })}
-              >
-                <Printer size={14} /> Print this card
-              </button>
+              {exportError ? <p className="captain-hint captain-photo-error">{exportError}</p> : null}
+              <div className="captain-export-actions">
+                <button
+                  type="button"
+                  className="print-action detail-print"
+                  disabled={exportBusy}
+                  onClick={() => void downloadSelectedPng(selected)}
+                >
+                  <Download size={14} /> {exportBusy ? "Saving…" : "Download PNG"}
+                </button>
+                <button
+                  type="button"
+                  className="print-action detail-print"
+                  onClick={() => requestPrint([cardFor(selected)], { ...printCtx, source: "captain_single" })}
+                >
+                  <Printer size={14} /> Print this card
+                </button>
+              </div>
             </aside>
           )}
         </div>

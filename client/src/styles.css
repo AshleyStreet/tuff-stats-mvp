@@ -372,6 +372,19 @@ main {
   margin-top: 10px;
   padding: 6px 10px;
 }
+.print-action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.captain-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.captain-export-actions .detail-print {
+  margin-top: 6px;
+}
 .page-heading::after {
   content: "";
   position: absolute;
