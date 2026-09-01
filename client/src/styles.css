@@ -1215,23 +1215,26 @@ button.log-row:hover {
   transform: translateY(-3px);
   box-shadow:
     0 16px 28px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px var(--red-deep);
+    inset 0 0 0 1px var(--tc-border, var(--red-deep));
 }
 .trading-card.selected .trading-card-face {
   box-shadow:
-    0 0 0 2px var(--red-bright),
-    0 12px 24px rgba(227, 27, 35, 0.28),
-    inset 0 0 0 1px var(--red-deep);
+    0 0 0 2px var(--tc-border, var(--red-bright)),
+    0 12px 24px color-mix(in srgb, var(--tc-border, #e31b23) 28%, transparent),
+    inset 0 0 0 1px var(--tc-border, var(--red-deep));
 }
 
 .trading-card-face {
+  --tc-bg: linear-gradient(145deg, #1a1a1a 0%, #0d0d0d 48%, #050505 100%);
+  --tc-border: rgba(227, 27, 35, 0.55);
+  --tc-accent: var(--red-bright);
   height: 100%;
   overflow: hidden;
   background: #0a0a0a;
   border-radius: 6px;
   box-shadow:
     0 14px 32px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(227, 27, 35, 0.35);
+    0 0 0 1px color-mix(in srgb, var(--tc-border) 65%, transparent);
   transition: transform 0.25s var(--ease), box-shadow 0.25s ease;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -1243,8 +1246,7 @@ button.log-row:hover {
   grid-template-rows: 1fr auto auto;
   height: 100%;
   padding: 10px 10px 8px;
-  background:
-    linear-gradient(145deg, #1a1a1a 0%, #0d0d0d 48%, #050505 100%);
+  background: var(--tc-bg);
   clip-path: polygon(
     0 0,
     100% 0,
@@ -1258,7 +1260,7 @@ button.log-row:hover {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid rgba(227, 27, 35, 0.55);
+  border: 2px solid var(--tc-border);
   clip-path: polygon(
     0 0,
     100% 0,
@@ -1268,6 +1270,33 @@ button.log-row:hover {
   );
   pointer-events: none;
   z-index: 4;
+}
+
+.trading-card.tc-layout-tall .tc-frame {
+  grid-template-rows: minmax(0, 1.45fr) auto auto;
+  padding: 8px 8px 6px;
+}
+.trading-card.tc-layout-tall .tc-hero {
+  margin-bottom: 4px;
+}
+.trading-card.tc-layout-tall .tc-nameplate {
+  margin-bottom: 3px;
+  padding: 5px 8px 4px;
+}
+.trading-card.tc-layout-tall .tc-stat strong {
+  font-size: clamp(18px, 7cqw, 26px);
+}
+
+.trading-card.tc-layout-defense .trading-card-face {
+  --tc-bg: linear-gradient(145deg, #151a22 0%, #0c1016 48%, #05070a 100%);
+  --tc-border: rgba(120, 160, 200, 0.55);
+  --tc-accent: #8eb7e0;
+}
+.trading-card.tc-layout-defense .tc-hero {
+  background:
+    radial-gradient(ellipse 90% 70% at 30% 80%, color-mix(in srgb, var(--tc-accent) 45%, transparent), transparent 58%),
+    radial-gradient(ellipse 60% 50% at 70% 20%, rgba(80, 80, 80, 0.25), transparent 55%),
+    linear-gradient(180deg, #1a222c 0%, #080a0e 100%);
 }
 
 .tc-num {
@@ -1292,7 +1321,7 @@ button.log-row:hover {
   border-radius: 2px;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 90% 70% at 30% 80%, rgba(227, 27, 35, 0.55), transparent 58%),
+    radial-gradient(ellipse 90% 70% at 30% 80%, color-mix(in srgb, var(--tc-accent, #e31b23) 55%, transparent), transparent 58%),
     radial-gradient(ellipse 60% 50% at 70% 20%, rgba(80, 80, 80, 0.25), transparent 55%),
     linear-gradient(180deg, #1c1c1c 0%, #080808 100%);
 }
@@ -1303,8 +1332,9 @@ button.log-row:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 15%;
+  object-position: 50% 15%;
   filter: contrast(1.08) saturate(0.92);
+  touch-action: none;
 }
 
 .tc-hero-fallback {
@@ -1381,12 +1411,24 @@ div.tc-hero-logo {
   white-space: nowrap;
 }
 
+.tc-title {
+  display: block;
+  margin-top: 3px;
+  color: rgba(232, 236, 240, 0.72);
+  font: 700 9px/1.2 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tc-statbar {
   display: grid;
   grid-template-columns: repeat(var(--tc-stat-cols, 3), minmax(0, 1fr));
   gap: 0;
   background: linear-gradient(180deg, #121212, #080808);
-  border-top: 1px solid rgba(227, 27, 35, 0.45);
+  border-top: 1px solid var(--tc-border, rgba(227, 27, 35, 0.45));
 }
 
 .tc-stat {
@@ -1409,7 +1451,7 @@ div.tc-hero-logo {
 
 .tc-stat span {
   display: block;
-  color: var(--red-bright);
+  color: var(--tc-accent, var(--red-bright));
   font: 700 8px "Barlow Condensed", sans-serif;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -1441,6 +1483,143 @@ div.tc-hero-logo {
   color: #8d8f93;
   font-size: 13px;
   line-height: 1.45;
+}
+.captain-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #c9cbcf;
+  font: 700 12px "Barlow Condensed";
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.captain-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--red-bright);
+}
+.captain-template-list {
+  display: grid;
+  gap: 8px;
+}
+.captain-template {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.captain-template strong {
+  font: 700 13px "Barlow Condensed";
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.captain-template span {
+  color: #8d8f93;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.captain-template:hover {
+  border-color: rgba(227, 27, 35, 0.35);
+}
+.captain-template.active {
+  border-color: rgba(227, 27, 35, 0.65);
+  background: rgba(227, 27, 35, 0.1);
+}
+.captain-color-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 8px;
+}
+.captain-color-row label {
+  display: grid;
+  gap: 6px;
+  color: #aaa;
+  font: 700 11px "Barlow Condensed";
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.captain-color-row input[type="color"] {
+  width: 100%;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: #141516;
+  cursor: pointer;
+}
+.captain-card-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 248px;
+}
+.captain-card-wrap .trading-card {
+  width: 100%;
+  max-width: none;
+}
+.captain-pin-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.72);
+  color: #c9cbcf;
+  cursor: pointer;
+}
+.captain-pin-btn:hover,
+.captain-pin-btn.active,
+.captain-card-wrap.is-pinned .captain-pin-btn {
+  color: var(--gold);
+  border-color: rgba(201, 162, 39, 0.55);
+}
+.captain-photo-stage {
+  position: relative;
+  margin: 8px 0 6px;
+  max-width: 220px;
+}
+.captain-photo-stage .trading-card {
+  margin: 0;
+  max-width: none;
+}
+.captain-photo-stage.is-draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.captain-photo-stage.is-draggable:active {
+  cursor: grabbing;
+}
+.captain-photo-drag-hint {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 10px;
+  z-index: 6;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #f0f3f6;
+  font: 700 10px/1.2 "Barlow Condensed";
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
+}
+.text-action.is-active {
+  color: var(--gold);
 }
 .captain-slot {
   margin-top: 14px;
@@ -1483,6 +1662,7 @@ div.tc-hero-logo {
 }
 .captain-custom-row input:focus,
 .captain-edit-row input:focus,
+.captain-jersey-input:focus,
 .captain-note-input:focus {
   border-color: rgba(227, 27, 35, 0.45);
 }
@@ -1497,6 +1677,18 @@ div.tc-hero-logo {
   padding: 9px 10px;
   outline: none;
   font: italic 15px/1.35 "Barlow Condensed", sans-serif;
+}
+.captain-jersey-input {
+  width: 88px;
+  color: #eee;
+  background: #141516;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 9px 10px;
+  outline: none;
+  font: 800 18px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: 1px;
+  text-align: center;
 }
 .captain-slot-actions {
   display: flex;
@@ -1529,7 +1721,7 @@ div.tc-hero-logo {
   text-transform: uppercase;
 }
 .captain-editor .trading-card {
-  margin: 8px 0 6px;
+  margin: 0;
   max-width: 220px;
 }
 .captain-editor .field-label { margin-top: 16px; }
