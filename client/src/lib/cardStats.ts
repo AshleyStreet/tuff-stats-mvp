@@ -1,10 +1,10 @@
+import { CARD_FACE_SLOTS, type CardStatLine } from "./cards";
 import { flagFootballPresentation } from "../league/flagFootball";
 import { readStat } from "../league/readStat";
 import type { StatColumn } from "../league/types";
 import type { Player } from "../types";
-import type { CardStatLine } from "./cards";
 
-export const SLOT_COUNT = 5;
+export const SLOT_COUNT = CARD_FACE_SLOTS;
 
 export type SlotKey = string;
 export type StatSlot = {

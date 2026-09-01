@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Printer, RotateCcw, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ImagePlus, Printer, RotateCcw, Search, X } from "lucide-react";
 import { getPlayers, getSeasons, peekSeasonPlayers } from "../api";
 import { BrandMark } from "../league/BrandMark";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
@@ -14,6 +14,7 @@ import {
   type SlotOverride,
   type StatSlot
 } from "../lib/cardStats";
+import { readCardPhoto } from "../lib/cardPhoto";
 import { loadCaptainSession, saveCaptainSession } from "../lib/captainSession";
 import { filterAndSortPlayers } from "../lib/query";
 import { trackClick, trackDrawerClose, trackEvent, trackFilter, trackPageView } from "../lib/analytics";
@@ -43,7 +44,11 @@ export function CaptainTools() {
   const [overrides, setOverrides] = useState<Record<string, PlayerOverrides>>(stored.overrides);
   const [defaultNote, setDefaultNote] = useState(stored.defaultNote);
   const [notes, setNotes] = useState<Record<string, string>>(stored.notes);
+  const [photos, setPhotos] = useState<Record<string, string>>(stored.photos);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const { printCards, requestPrint } = usePrintCards();
   const printCtx = { league: league.slug, season, tab: "captain_tools" };
 
@@ -97,8 +102,11 @@ export function CaptainTools() {
   }, [season, league.slug]);
 
   useEffect(() => {
-    saveCaptainSession({ slots, overrides, defaultNote, notes }, league.slug);
-  }, [slots, overrides, defaultNote, notes, league.slug]);
+    const result = saveCaptainSession({ slots, overrides, defaultNote, notes, photos }, league.slug);
+    if (result === "photos-skipped" && Object.keys(photos).length) {
+      setPhotoError("Photos are too large to keep in this tab. They'll stay until you refresh.");
+    }
+  }, [slots, overrides, defaultNote, notes, photos, league.slug]);
 
   const players = useMemo(
     () =>
@@ -116,7 +124,8 @@ export function CaptainTools() {
     const personal = (notes[player.id] ?? "").trim() || defaultNote.trim();
     return toTradingCard(player, season, data?.meta.teamLogos, {
       lineItems: resolveLineItems(player, slots, overrides[player.id], presentation.cardOptions),
-      note: personal
+      note: personal,
+      photoUrl: photos[player.id]
     });
   }
 
@@ -160,11 +169,42 @@ export function CaptainTools() {
       const { [playerId]: _drop, ...rest } = current;
       return rest;
     });
+    setPhotos((current) => {
+      const { [playerId]: _drop, ...rest } = current;
+      return rest;
+    });
+    setPhotoError(null);
   }
 
   function clearPlayerEdits() {
     setOverrides({});
     setNotes({});
+    setPhotos({});
+    setPhotoError(null);
+  }
+
+  function removePhoto(playerId: string) {
+    setPhotos((current) => {
+      const { [playerId]: _drop, ...rest } = current;
+      return rest;
+    });
+    setPhotoError(null);
+    trackEvent("captain_photo_clear", { league: league.slug, player_id: playerId });
+  }
+
+  async function onPhotoFile(playerId: string, file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const dataUrl = await readCardPhoto(file);
+      setPhotos((current) => ({ ...current, [playerId]: dataUrl }));
+      trackEvent("captain_photo_set", { league: league.slug, player_id: playerId });
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Couldn't add that photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   function toggleCard(player: Player) {
@@ -250,8 +290,8 @@ export function CaptainTools() {
               STAT SLOTS
             </div>
             <p className="captain-hint">
-              Pick five SportsPress stats, or Custom to type a label and number. Click a card to override one player.
-              Closes with this tab.
+              Pick up to five SportsPress stats, or Custom to type a label and number. Empty write-ins stay off the
+              card. Click a card to add a photo or override one player. Closes with this tab.
             </p>
             {slots.map((slot, index) => (
               <div className="captain-slot" key={`slot-${index}`}>
@@ -342,7 +382,7 @@ export function CaptainTools() {
                 </p>
               </div>
               <div className="heading-actions">
-                {(Object.keys(overrides).length > 0 || Object.keys(notes).length > 0) && (
+                {(Object.keys(overrides).length > 0 || Object.keys(notes).length > 0 || Object.keys(photos).length > 0) && (
                   <button type="button" className="text-action" onClick={() => {
                     trackEvent("captain_edits_clear", { league: league.slug, scope: "all" });
                     clearPlayerEdits();
@@ -394,9 +434,39 @@ export function CaptainTools() {
               <div className="eyebrow">Write-in</div>
               <h2>{selected.name}</h2>
               <p className="captain-hint">
-                Leave a field blank to keep the preset. These edits stay in this tab only.
+                Leave a field blank to keep the preset. Photo and edits stay in this tab only.
               </p>
               <TradingCard card={cardFor(selected)} />
+              <label className="field-label">Player photo</label>
+              <p className="captain-hint">JPEG, PNG, or WebP. Printed on this card only.</p>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  void onPhotoFile(selected.id, file);
+                }}
+              />
+              <div className="captain-photo-actions">
+                <button
+                  type="button"
+                  className="text-action"
+                  disabled={photoBusy}
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  <ImagePlus size={14} />
+                  {photoBusy ? "Adding…" : photos[selected.id] ? "Change photo" : "Add photo"}
+                </button>
+                {photos[selected.id] ? (
+                  <button type="button" className="text-action" onClick={() => removePhoto(selected.id)}>
+                    Remove photo
+                  </button>
+                ) : null}
+              </div>
+              {photoError ? <p className="captain-hint captain-photo-error">{photoError}</p> : null}
               <label className="field-label">Personal note</label>
               <textarea
                 className="captain-note-input"
