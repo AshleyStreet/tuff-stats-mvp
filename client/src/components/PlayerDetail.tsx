@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { CalendarDays, ExternalLink, Printer, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
-import { toTradingCard, type TradingCardData } from "../lib/cards";
+import { cardTitleLine, toTradingCard, type TradingCardData } from "../lib/cards";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
 import { readStat } from "../league/readStat";
 import { teamLogoUrl } from "../lib/teams";
@@ -186,7 +186,8 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                     team: seasonView.team ?? teamLabel,
                     number: profile?.number,
                     stats: seasonView.stats,
-                    derived: seasonView.derived
+                    derived: seasonView.derived,
+                    titleLine: cardTitleLine(seasonView.team ?? teamLabel, seasonView.season)
                   })
                 )
               }

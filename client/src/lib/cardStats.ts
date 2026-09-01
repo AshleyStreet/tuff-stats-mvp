@@ -28,22 +28,41 @@ export const DEFAULT_SLOTS: StatSlot[] = flagFootballPresentation.cardDefaults.m
   customValue: ""
 }));
 
-export function emptySlots(): StatSlot[] {
-  return Array.from({ length: SLOT_COUNT }, () => ({
-    key: "custom",
+export function emptySlot(): StatSlot {
+  return { key: "custom", customLabel: "", customValue: "" };
+}
+
+export function emptySlots(count = SLOT_COUNT): StatSlot[] {
+  const size = Math.max(1, Math.min(SLOT_COUNT, count));
+  return Array.from({ length: size }, () => emptySlot());
+}
+
+export function defaultSlots(columns: StatColumn[] = flagFootballPresentation.cardDefaults): StatSlot[] {
+  const keys = columns.map((column) => column.key).slice(0, SLOT_COUNT);
+  if (!keys.length) return [emptySlot()];
+  return keys.map((key) => ({
+    key,
     customLabel: "",
     customValue: ""
   }));
 }
 
-export function defaultSlots(columns: StatColumn[] = flagFootballPresentation.cardDefaults): StatSlot[] {
-  const keys = columns.map((column) => column.key);
-  while (keys.length < SLOT_COUNT) keys.push("custom");
-  return keys.slice(0, SLOT_COUNT).map((key) => ({
-    key,
-    customLabel: "",
-    customValue: ""
-  }));
+export function canAddSlot(slots: StatSlot[]) {
+  return slots.length < SLOT_COUNT;
+}
+
+export function canRemoveSlot(slots: StatSlot[]) {
+  return slots.length > 1;
+}
+
+export function addSlot(slots: StatSlot[]): StatSlot[] {
+  if (!canAddSlot(slots)) return slots;
+  return [...slots, emptySlot()];
+}
+
+export function removeSlot(slots: StatSlot[]): StatSlot[] {
+  if (!canRemoveSlot(slots)) return slots;
+  return slots.slice(0, -1);
 }
 
 export function liveValue(player: Player, key: string): string {
