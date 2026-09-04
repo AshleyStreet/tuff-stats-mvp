@@ -1,6 +1,8 @@
-# TUFF Stats MVP
+# Afterwhistle
 
-A UX-first replacement for the 2026 TUFF stats table, built with React, TypeScript and Node/Express.
+A white-label stats platform for amateur sports leagues, built with React, TypeScript and Node/Express. One codebase serves many leagues ("tenants"); each tenant gets its own branding, data source, and stat presentation without a code fork.
+
+**TUFF** (Toronto United Flag Football) is Afterwhistle's founding tenant — the UX-first replacement for its 2026 stats table that the platform grew out of.
 
 ## What it does
 
@@ -9,21 +11,45 @@ A UX-first replacement for the 2026 TUFF stats table, built with React, TypeScri
 - Sort by receptions, receiving TDs, interceptions, sacks, passing TDs, total points, or games
 - Quick-leaders panel
 - Player detail drawer with grouped offense / defense / conversions
-- Small Node API that normalizes TUFF's stat abbreviations
-- Change-detection cache (memory + disk) that only re-fetches when SportsPress list data changes
-- No API key required for the current public source
+- Small Node API that normalizes each tenant's stat abbreviations into one canonical player model
+- Change-detection cache (memory + disk, isolated per tenant) that only re-fetches when source data changes
+- No API key required for the current public sources
+
+## Multi-tenant architecture
+
+Each tenant is a `League` (see `server/src/leagues/types.ts`): branding, copy, sport, franchise team names, and a data-source config. Built-in tenants are defined in code under `server/src/leagues/` (`tuff.ts`, `harbor.ts`, `bush.ts`, `passion.ts`); additional tenants can be created and edited through the `/admin` dashboard, which persists them as JSON overlay files under `server/.tenants/` (see `server/src/leagues/store.ts`).
+
+A tenant is served by one of three data adapters (`server/src/adapters/`), picked by `league.adapter`:
+
+- `tuff` — TUFF's bespoke SportsPress-REST-first, HTML-scrape-fallback adapter
+- `sportspress` — a generic, config-driven adapter for any SportsPress-powered league site
+- `fixture` — static JSON data, used for demo tenants
+
+All three normalize their raw source fields into the same canonical `Player`/`Stats` shape (`server/src/domain/types.ts`) via a shared stat-abbreviation map that a tenant can extend or override per its own source fields (`LeagueSourceConfig.statMap`) — onboarding a league with different raw stat names is a config change, not a code change:
+
+```json
+{
+  "source": {
+    "statMap": {
+      "marques": "goals"
+    }
+  }
+}
+```
+
+The `sourceUrl`/`source` block above is exactly what `POST /api/admin/tenants` already accepts when creating a `sportspress` tenant, so `statMap` needs no admin-dashboard changes to use.
+
+**Tenant resolution** is hostname-based: in production, the request's `Host` header is matched against each tenant's configured `hostnames[]` (e.g. `stats.playtuff.ca` → TUFF). In development only, a `?league=<slug>` query param or `LEAGUE_SLUG` env var can override this for local testing. An unrecognized host safely falls back to the default tenant rather than erroring.
+
+Each tenant's disk and in-memory caches are keyed by tenant id, so one tenant's data can never be read from or overwritten by another's cache.
 
 ## Data strategy
 
-The API adapter attempts SportsPress REST first. If the list endpoint is unavailable or doesn't expose usable stat rows, it falls back to parsing the public 2026 stats HTML table. The React app only consumes our normalized API, so the upstream implementation can change without infecting the UI.
+Adapters attempt each source's REST API first. If that's unavailable or doesn't expose usable rows, the `tuff` adapter falls back to parsing the public stats HTML table. The React app only consumes Afterwhistle's normalized API, so an upstream site's implementation can change without infecting the UI.
 
-Heavy season payloads are cached under `server/.cache/` and reused until a lightweight SportsPress `_fields` / `modified_gmt` check shows the source lists changed. If the source is temporarily down, the last good snapshot is served. Force re-fetch is admin-only (`POST /api/admin/refresh` with `ADMIN_TOKEN`).
+Heavy season payloads are cached under `server/.cache/<tenant>/` and reused until a lightweight change-detection check (e.g. SportsPress `_fields` / `modified_gmt`) shows the source data changed. If a source is temporarily down, the last good snapshot is served. Force re-fetch requires admin credentials (see [Admin tokens](#admin-tokens) below).
 
-On startup the API warms every season into that cache in the background. Player career profiles then read those warm snapshots directly (no per-season revalidation chatter).
-
-Default source:
-
-`https://www.playtuff.ca/list/2026-tuff-stats/`
+On startup the API warms every season into that cache in the background for the default tenant. Player career profiles then read those warm snapshots directly (no per-season revalidation chatter).
 
 ## Run it
 
@@ -47,12 +73,21 @@ Copy `server/.env.example` to `server/.env` if you want to override defaults.
 
 ```env
 PORT=4000
+# Optional. Overrides TUFF's configured source URL (server/src/leagues/tuff.ts).
 TUFF_STATS_URL=https://www.playtuff.ca/list/2026-tuff-stats/
-TUFF_LIST_SLUG=2026-tuff-stats
 ADMIN_TOKEN=
+# Optional. Per-tenant refresh token — see "Admin tokens" below.
+# ADMIN_TOKEN_TUFF=
 ```
 
-Set `ADMIN_TOKEN` on the server to enable force refresh. Only you should know that token — never put it in the client build.
+## Admin tokens
+
+There are two separate credentials:
+
+- **`ADMIN_TOKEN`** — the platform token. It gates tenant management: `/admin`, `POST`/`PUT /api/admin/tenants`, and `POST /api/admin/probe`. These are cross-tenant registry operations, so there's one platform token, not one per tenant.
+- **A per-tenant refresh token** — gates `POST /api/admin/refresh` and the `?refresh=1` bypass on `GET /api/seasons`/`/api/schedule`/`/api/players` for one specific tenant, so a leaked or shared refresh credential can't be used to force-refresh every tenant's data. Set it either as an `ADMIN_TOKEN_<SLUG>` env var (e.g. `ADMIN_TOKEN_TUFF`, highest precedence) or via the "Refresh token" field on that tenant in `/admin`.
+
+A tenant with no per-tenant token configured still accepts the platform `ADMIN_TOKEN` for its refresh — this is the default for every tenant until you set one, so existing deployments need no changes to keep working.
 
 ```bash
 curl -X POST https://<your-app>/api/admin/refresh \
@@ -65,7 +100,7 @@ Useful endpoints:
 
 - `GET /api/health` — lightweight liveness + warm summary
 - `GET /api/status` — cache/warm detail
-- `POST /api/admin/refresh` — force re-fetch (requires `ADMIN_TOKEN`)
+- `POST /api/admin/refresh` — force re-fetch (requires that tenant's admin token)
 
 Local production smoke test:
 
@@ -78,7 +113,7 @@ Then open http://localhost:4000
 
 ## Host on Lightsail
 
-Use a Lightsail instance plus `https://stats.playtuff.ca` if you do not want an `.onrender.com` URL. Step-by-step: [deploy/lightsail/README.md](deploy/lightsail/README.md).
+Use a Lightsail instance plus a domain of your own (e.g. `stats.playtuff.ca` for TUFF) if you do not want an `.onrender.com` URL. Step-by-step: [deploy/lightsail/README.md](deploy/lightsail/README.md).
 
 ## Production note
 

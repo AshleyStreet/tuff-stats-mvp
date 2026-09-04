@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tuff-stats
+    name: afterwhistle
     runtime: node
     plan: free
     buildCommand: npm install --include=dev && npm run install:all && npm run build
@@ -13,14 +13,12 @@ services:
         value: production
       - key: TUFF_STATS_URL
         value: https://www.playtuff.ca/list/2026-tuff-stats/
-      - key: TUFF_LIST_SLUG
-        value: 2026-tuff-stats
       - key: ADMIN_TOKEN
         sync: false
 
   # Pings the web service so free-tier instances stay warm.
   - type: cron
-    name: tuff-stats-keepalive
+    name: afterwhistle-keepalive
     runtime: node
     plan: free
     schedule: "*/12 * * * *"
@@ -31,6 +29,6 @@ services:
         value: "20"
       - key: KEEPALIVE_URL
         fromService:
-          name: tuff-stats
+          name: afterwhistle
           type: web
           envVarKey: RENDER_EXTERNAL_URL

@@ -42,6 +42,9 @@ export type AdminTenant = {
   builtIn: boolean;
   franchiseTeamNames: string[];
   sourceOrigin?: string;
+  whiteLabel: boolean;
+  /** Never echoes the raw token back — just whether one is configured. */
+  hasRefreshToken: boolean;
 };
 
 export type TenantWriteInput = {
@@ -57,6 +60,9 @@ export type TenantWriteInput = {
   sport?: string;
   sourceUrl?: string;
   source?: LeagueSourceConfig;
+  whiteLabel?: boolean;
+  /** Set to a new token, or "" to clear it and fall back to the platform ADMIN_TOKEN. */
+  refreshToken?: string;
 };
 
 function toAdminTenant(league: League): AdminTenant {
@@ -73,7 +79,9 @@ function toAdminTenant(league: League): AdminTenant {
     adapter: league.adapter,
     builtIn: isBuiltInLeague(league.slug),
     franchiseTeamNames: [...league.source.franchiseTeamNames],
-    sourceOrigin: league.adapter === "sportspress" ? league.source.origin : undefined
+    sourceOrigin: league.adapter === "sportspress" ? league.source.origin : undefined,
+    whiteLabel: Boolean(league.whiteLabel),
+    hasRefreshToken: Boolean(league.refreshToken?.trim())
   };
 }
 
@@ -182,6 +190,8 @@ export async function createAdminTenant(input: TenantWriteInput): Promise<AdminT
       sport,
       sportIcon,
       source,
+      whiteLabel: input.whiteLabel,
+      refreshToken: input.refreshToken,
       fixture:
         adapter === "fixture"
           ? emptyFixtureSeed({ slug, publicSeason, franchiseTeamNames })
@@ -225,7 +235,9 @@ export function updateAdminTenant(slugInput: string, input: TenantWriteInput): A
       branding: runStore(() => brandingPatch(input.branding)),
       copy: input.copy,
       sport,
-      sportIcon
+      sportIcon,
+      whiteLabel: input.whiteLabel,
+      refreshToken: input.refreshToken
     });
   } catch (error) {
     wrapStoreError(error);

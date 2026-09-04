@@ -55,6 +55,7 @@ export type PublicLeague = {
   sportIcon: SportIcon;
   presentation: StatPresentation;
   franchiseTeamNames: string[];
+  whiteLabel?: boolean;
 };
 
 export type AdminTenant = {
@@ -71,6 +72,8 @@ export type AdminTenant = {
   builtIn: boolean;
   franchiseTeamNames: string[];
   sourceOrigin?: string;
+  whiteLabel: boolean;
+  hasRefreshToken: boolean;
 };
 
 export type SourceProbeResult = {

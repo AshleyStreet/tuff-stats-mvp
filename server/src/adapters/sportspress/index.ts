@@ -443,7 +443,7 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
           : typeof teamRaw === "string"
             ? decodeEntities(teamRaw).trim()
             : undefined;
-      const stats = statsFromRow(row as Record<string, unknown>);
+      const stats = statsFromRow(row as Record<string, unknown>, league.source);
       players.push(
         buildPlayer(name, stats, {
           sourceId: id,
@@ -588,7 +588,7 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
 
       const detail: GameDetail = {
         game,
-        sides: parseBoxScore(event.performance, game.teams, playerNames),
+        sides: parseBoxScore(event.performance, game.teams, playerNames, league.source),
         meta: { fetchedAt: new Date().toISOString(), league: leagueRef }
       };
       gameBoxCache.set(id, detail);

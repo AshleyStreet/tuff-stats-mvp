@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { getAdapter } from "./adapters/resolve.js";
 import { toLeagueRef, type StatKey } from "./domain/types.js";
 import { AdminError, createAdminTenant, listAdminTenants, probeAdminSourceUrl, updateAdminTenant } from "./leagues/admin.js";
-import { resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
+import { refreshTokenFor } from "./leagues/adminTokens.js";
+import { getLeagueByHostname, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
@@ -43,20 +44,41 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
   app.use(cors());
   app.use(express.json());
 
+  /** Warn once per unresolved production host, not once per request. */
+  const warnedUnresolvedHosts = new Set<string>();
+
   function tenant(req: express.Request): { league: League; adapter: LeagueDataAdapter } {
+    const host = req.get("host");
+    const forwardedHost = req.get("x-forwarded-host");
     const league = resolveRequestLeague({
-      host: req.get("host"),
-      forwardedHost: req.get("x-forwarded-host"),
+      host,
+      forwardedHost,
       slug: String(req.query.league ?? "")
     });
+
+    if (process.env.NODE_ENV === "production") {
+      const primaryHost = (forwardedHost?.split(",")[0] ?? host ?? "").trim();
+      if (primaryHost && !getLeagueByHostname(primaryHost) && !warnedUnresolvedHosts.has(primaryHost)) {
+        warnedUnresolvedHosts.add(primaryHost);
+        console.warn(
+          `Unrecognized tenant host "${primaryHost}" — falling back to ${league.slug}. Check DNS/hostname config if this is unexpected.`
+        );
+      }
+    }
+
     return { league, adapter: getAdapter(league) };
   }
 
-  function isAdmin(req: express.Request) {
-    if (!adminToken) return false;
+  function providedTokens(req: express.Request): string[] {
     const header = req.get("x-admin-token") ?? "";
     const bearer = (req.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    return tokensMatch(header, adminToken) || tokensMatch(bearer, adminToken);
+    return [header, bearer];
+  }
+
+  /** Platform credential: gates tenant CRUD (/admin, /api/admin/tenants, /api/admin/probe). */
+  function isAdmin(req: express.Request) {
+    if (!adminToken) return false;
+    return providedTokens(req).some((token) => tokensMatch(token, adminToken));
   }
 
   function requireAdmin(req: express.Request, res: express.Response) {
@@ -69,6 +91,19 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
       return false;
     }
     return true;
+  }
+
+  /**
+   * Per-tenant credential: gates POST /api/admin/refresh and the refresh=1
+   * bypasses for this one tenant. If the tenant has its own token
+   * configured (env var or admin-set refreshToken), only that token works —
+   * the platform ADMIN_TOKEN no longer refreshes it. Otherwise falls back
+   * to the platform token (legacy behavior for tenants with no token set).
+   */
+  function isRefreshAuthorized(req: express.Request, league: League) {
+    const tenantToken = refreshTokenFor(league);
+    if (tenantToken) return providedTokens(req).some((token) => tokensMatch(token, tenantToken));
+    return isAdmin(req);
   }
 
   app.get("/api/league", (req, res) => {
@@ -126,10 +161,12 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
   });
 
   app.post("/api/admin/refresh", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    const { league, adapter } = tenant(req);
+    if (!isRefreshAuthorized(req, league)) {
+      return res.status(401).json({ error: "Unauthorized — this tenant requires its own refresh token" });
+    }
 
     try {
-      const { adapter } = tenant(req);
       const season = String(req.body?.season ?? req.query.season ?? "").trim();
       const result = await adapter.refresh(season || undefined);
       return res.json({ ok: true, ...result, status: adapter.status() });
@@ -141,11 +178,11 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
 
   app.get("/api/seasons", async (req, res) => {
     try {
-      const force = req.query.refresh === "1";
-      if (force && !isAdmin(req)) {
-        return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
-      }
       const { league, adapter } = tenant(req);
+      const force = req.query.refresh === "1";
+      if (force && !isRefreshAuthorized(req, league)) {
+        return res.status(401).json({ error: "Unauthorized — force refresh requires this tenant's admin token" });
+      }
       const seasons = await adapter.getSeasons({ force });
       const publicSeason = league.publicSeason;
       const defaultSeason = seasons.some((season) => season.year === publicSeason)
@@ -160,12 +197,13 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
 
   app.get("/api/schedule", async (req, res) => {
     try {
+      const { league, adapter } = tenant(req);
       const season = String(req.query.season ?? "").trim();
       const force = req.query.refresh === "1";
-      if (force && !isAdmin(req)) {
-        return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
+      if (force && !isRefreshAuthorized(req, league)) {
+        return res.status(401).json({ error: "Unauthorized — force refresh requires this tenant's admin token" });
       }
-      const data = await tenant(req).adapter.getSchedule({ force, season: season || undefined });
+      const data = await adapter.getSchedule({ force, season: season || undefined });
       return res.json(data);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -187,12 +225,13 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
 
   app.get("/api/players", async (req, res) => {
     try {
+      const { league, adapter } = tenant(req);
       const force = req.query.refresh === "1";
-      if (force && !isAdmin(req)) {
-        return res.status(401).json({ error: "Unauthorized — force refresh requires admin token" });
+      if (force && !isRefreshAuthorized(req, league)) {
+        return res.status(401).json({ error: "Unauthorized — force refresh requires this tenant's admin token" });
       }
       const season = String(req.query.season ?? "").trim();
-      const data = await tenant(req).adapter.getPlayers({ force, season: season || undefined });
+      const data = await adapter.getPlayers({ force, season: season || undefined });
       const players = filterAndSortPlayers(data.players, {
         search: String(req.query.search ?? ""),
         team: String(req.query.team ?? ""),

@@ -103,6 +103,7 @@ export function getLeagueBySlug(slug: string): League | undefined {
   return leagues.get(slug.trim().toLowerCase());
 }
 
+/** O(n) over a small tenant set — intentional, don't add a cache keyed by hostname here, since it'd need to stay in sync across reloadTenants(). */
 export function getLeagueByHostname(host: string): League | undefined {
   const hostname = host.trim().toLowerCase().split(":")[0];
   if (!hostname) return undefined;

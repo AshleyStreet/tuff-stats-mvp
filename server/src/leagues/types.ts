@@ -1,3 +1,4 @@
+import type { StatKey } from "../domain/types.js";
 import type { FixtureSeed } from "./fixture-seed.js";
 import type { SportIcon, StatPresentation } from "./sports/types.js";
 
@@ -64,6 +65,12 @@ export type LeagueSourceConfig = {
   defaultStatsListSuffix: string;
   statsListTokens: string[];
   excludeStatsSlugs: string[];
+  /**
+   * Raw source field name (lowercased) -> canonical StatKey. Merged over,
+   * and able to override, the shared default map in lib/stats.ts. Omit
+   * for tenants whose fields already match the shared map.
+   */
+  statMap?: Record<string, StatKey>;
   standings: {
     modernFromYear: number;
     modern: string[];
@@ -96,6 +103,15 @@ export type League = {
   source: LeagueSourceConfig;
   /** Present for created fixture tenants. Harbor uses the baked seed in the fixture adapter. */
   fixture?: FixtureSeed;
+  /** Club-plan tenants hide the "Stats by Afterwhistle" footer badge. */
+  whiteLabel?: boolean;
+  /**
+   * Per-tenant secret gating POST /api/admin/refresh and the refresh=1
+   * bypasses for this tenant. When unset, the platform ADMIN_TOKEN is
+   * accepted instead (legacy fallback — see adminTokens.ts). Server-only,
+   * never sent to the client.
+   */
+  refreshToken?: string;
 };
 
 /** Client-safe subset. Source URLs and slug-discovery rules stay on the server. */
@@ -110,6 +126,7 @@ export type PublicLeague = {
   sportIcon: SportIcon;
   presentation: StatPresentation;
   franchiseTeamNames: string[];
+  whiteLabel?: boolean;
 };
 
 export function toPublicLeague(league: League): PublicLeague {
@@ -123,6 +140,7 @@ export function toPublicLeague(league: League): PublicLeague {
     copy: league.copy,
     sportIcon: league.sportIcon,
     presentation: league.presentation,
-    franchiseTeamNames: league.source.franchiseTeamNames
+    franchiseTeamNames: league.source.franchiseTeamNames,
+    whiteLabel: league.whiteLabel
   };
 }

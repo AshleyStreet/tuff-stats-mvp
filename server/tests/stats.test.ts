@@ -141,6 +141,23 @@ describe("statsFromRow", () => {
       redCards: 0
     });
   });
+
+  it("ignores a tenant statMap when a row has no matching fields", () => {
+    const source = { ...tuffLeague.source, statMap: { xyz: "goals" as const } };
+    expect(statsFromRow({ gp: "5" }, source).gms).toBe(5);
+  });
+
+  it("lets a tenant statMap add a raw field the shared default doesn't know", () => {
+    const source = { ...tuffLeague.source, statMap: { marques: "goals" as const } };
+    expect(statsFromRow({ marques: "3" }, source).goals).toBe(3);
+    expect(statsFromRow({ marques: "3" }).goals).toBe(0);
+  });
+
+  it("lets a tenant statMap override where the shared default sends a field", () => {
+    const source = { ...tuffLeague.source, statMap: { rec: "goals" as const } };
+    expect(statsFromRow({ rec: "9" }, source)).toMatchObject({ rec: 0, goals: 9 });
+    expect(statsFromRow({ rec: "9" })).toMatchObject({ rec: 9, goals: 0 });
+  });
 });
 
 describe("buildPlayer", () => {

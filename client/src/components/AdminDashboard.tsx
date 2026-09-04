@@ -25,6 +25,10 @@ type Draft = {
   recapLinkLabel: string;
   htmlSourceLabel: string;
   franchiseTeamNames: string;
+  whiteLabel: boolean;
+  /** Write-only: never populated from the server. Blank + unchecked clear = leave unchanged. */
+  refreshToken: string;
+  clearRefreshToken: boolean;
 };
 
 const emptyDraft: Draft = {
@@ -46,7 +50,10 @@ const emptyDraft: Draft = {
   profileLinkLabel: "",
   recapLinkLabel: "",
   htmlSourceLabel: "",
-  franchiseTeamNames: ""
+  franchiseTeamNames: "",
+  whiteLabel: false,
+  refreshToken: "",
+  clearRefreshToken: false
 };
 
 function tokenHeaders(token: string) {
@@ -78,7 +85,10 @@ function toDraft(tenant: AdminTenant): Draft {
     profileLinkLabel: tenant.copy.profileLinkLabel,
     recapLinkLabel: tenant.copy.recapLinkLabel,
     htmlSourceLabel: tenant.copy.htmlSourceLabel,
-    franchiseTeamNames: tenant.franchiseTeamNames.join(", ")
+    franchiseTeamNames: tenant.franchiseTeamNames.join(", "),
+    whiteLabel: tenant.whiteLabel,
+    refreshToken: "",
+    clearRefreshToken: false
   };
 }
 
@@ -114,6 +124,14 @@ function payloadFromDraft(
     copy,
     adapter: draft.adapter,
     sport: draft.sport,
+    whiteLabel: draft.whiteLabel,
+    // Omit the key entirely when neither field was touched, so saving doesn't
+    // accidentally clear an existing token the admin never meant to change.
+    ...(draft.clearRefreshToken
+      ? { refreshToken: "" }
+      : draft.refreshToken.trim()
+        ? { refreshToken: draft.refreshToken.trim() }
+        : {}),
     ...(creating && draft.sourceUrl.trim() ? { sourceUrl: draft.sourceUrl.trim() } : {}),
     ...(creating && probe?.source ? { source: probe.source } : {}),
     ...(creating || draft.franchiseTeamNames.trim()
@@ -572,6 +590,41 @@ export function AdminDashboard() {
                 Tagline
                 <input value={draft.tagline} onChange={(event) => setDraft({ ...draft, tagline: event.target.value })} />
               </label>
+              <label className="captain-check admin-span">
+                <input
+                  type="checkbox"
+                  checked={draft.whiteLabel}
+                  onChange={(event) => setDraft({ ...draft, whiteLabel: event.target.checked })}
+                />
+                White label (Club plan) — hides the "Stats by Afterwhistle" footer badge
+              </label>
+              <label className="field-label admin-span">
+                Refresh token
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={draft.refreshToken}
+                  disabled={draft.clearRefreshToken}
+                  onChange={(event) => setDraft({ ...draft, refreshToken: event.target.value })}
+                  placeholder={
+                    !creating && selected?.hasRefreshToken
+                      ? "Configured — leave blank to keep it unchanged"
+                      : "Leave blank to allow the platform admin token to refresh this tenant"
+                  }
+                />
+              </label>
+              {!creating && selected?.hasRefreshToken ? (
+                <label className="captain-check admin-span">
+                  <input
+                    type="checkbox"
+                    checked={draft.clearRefreshToken}
+                    onChange={(event) =>
+                      setDraft({ ...draft, clearRefreshToken: event.target.checked, refreshToken: "" })
+                    }
+                  />
+                  Remove this tenant's refresh token (the platform admin token will refresh it again)
+                </label>
+              ) : null}
               {(creating || selected?.builtIn === false) && (
                 <label className="field-label admin-span">
                   Team names (comma-separated)
