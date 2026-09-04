@@ -450,7 +450,7 @@ async function fromSportsPress(season: SeasonInfo): Promise<Player[] | null> {
       const rawName = row.name ?? row.player ?? row.title;
       const name = typeof rawName === "string" ? decodeEntities(rawName).trim() : "";
       if (!name || name.toLowerCase() === "player") return null;
-      return buildPlayer(name, statsFromRow(row), { sourceId });
+      return buildPlayer(name, statsFromRow(row, league.source), { sourceId });
     })
     .filter((player): player is Player => Boolean(player));
 
@@ -894,7 +894,7 @@ export async function getGame(eventId: string, seasonYear?: string): Promise<Gam
 
   const detail: GameDetail = {
     game,
-    sides: parseBoxScore(event.performance, game.teams, names),
+    sides: parseBoxScore(event.performance, game.teams, names, league.source),
     meta: { fetchedAt: new Date().toISOString(), league: leagueRef }
   };
   gameBoxCache.set(id, detail);
@@ -1214,7 +1214,7 @@ async function loadSeasonBoxScores(year: string) {
       const parsed = parseScheduleEvent(event, teamNames, venueNames);
       if (!parsed) return null;
       const game = applyTeamLogos([parsed], catalog.logos)[0] ?? parsed;
-      return { game, sides: parseBoxScore(event.performance, game.teams) };
+      return { game, sides: parseBoxScore(event.performance, game.teams, undefined, league.source) };
     })
     .filter((row): row is { game: ScheduleGame; sides: ReturnType<typeof parseBoxScore> } => Boolean(row));
 

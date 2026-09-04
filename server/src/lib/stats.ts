@@ -121,10 +121,20 @@ export function yearFromStatsList(list: { slug: string; title?: { rendered?: str
   return titleMatch?.[1] ?? null;
 }
 
-export function statsFromRow(row: Record<string, unknown>): Stats {
+function statMapFor(source?: LeagueSourceConfig): Record<string, StatKey> {
+  if (!source?.statMap) return headerMap;
+  const overrides: Record<string, StatKey> = {};
+  for (const [key, value] of Object.entries(source.statMap)) {
+    overrides[key.toLowerCase()] = value;
+  }
+  return { ...headerMap, ...overrides };
+}
+
+export function statsFromRow(row: Record<string, unknown>, source?: LeagueSourceConfig): Stats {
   const stats = emptyStats();
+  const map = statMapFor(source);
   for (const [key, value] of Object.entries(row)) {
-    const mapped = headerMap[key.toLowerCase()];
+    const mapped = map[key.toLowerCase()];
     if (mapped) stats[mapped] = toNumber(value);
   }
   return stats;

@@ -8,6 +8,7 @@ import type {
   ScheduleGame,
   ScheduleSide
 } from "../domain/types.js";
+import type { LeagueSourceConfig } from "../leagues/types.js";
 import { statsFromRow, toNumber } from "./stats.js";
 
 export type {
@@ -75,7 +76,8 @@ function jerseySortValue(value?: string) {
 export function parseBoxScore(
   performance: Record<string, Record<string, Record<string, unknown>>> | null | undefined,
   sides: ScheduleSide[],
-  playerNames: Map<number, string> = new Map()
+  playerNames: Map<number, string> = new Map(),
+  source?: LeagueSourceConfig
 ): BoxScoreSide[] {
   return sides.map((side) => {
     const block = performance?.[String(side.id)] ?? {};
@@ -86,7 +88,7 @@ export function parseBoxScore(
       const sourceId = Number(key);
       if (!Number.isFinite(sourceId) || sourceId <= 0) continue;
 
-      const stats = statsFromRow(row);
+      const stats = statsFromRow(row, source);
       const rawNumber = String(row.number ?? "").trim();
       const rawName = typeof row.name === "string" ? row.name.trim() : "";
       const name = playerNames.get(sourceId) || rawName || `Player ${sourceId}`;
