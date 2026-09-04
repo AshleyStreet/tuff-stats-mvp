@@ -83,14 +83,44 @@ curl -X POST http://127.0.0.1/api/admin/refresh \
 
 ## 5. Update
 
+The instance **does not build the app** — 1 GB is not enough. A `docker compose
+up -d --build` here exhausted memory badly enough that `sshd` could not fork a
+new session and the Lightsail browser terminal returned `UPSTREAM_ERROR [515]`,
+while the already-running containers kept serving normally. Reboot from the
+Lightsail console to recover (volumes and the static IP survive it).
+
+Images are built by the **Build image** workflow on every push to `main` and
+published to `ghcr.io/ashleystreet/tuff-stats-mvp`. To ship one, run **Deploy
+Lightsail** from GitHub Actions (`workflow_dispatch`) — it pulls and restarts,
+no compiling. Requires repository secrets `LIGHTSAIL_HOST` (static IP or
+`stats.playtuff.ca`), `LIGHTSAIL_USER` (`ubuntu`) and `LIGHTSAIL_SSH_KEY`, plus
+repository *variables* `VITE_GA_MEASUREMENT_ID` (and the Plausible ones if used)
+— those are baked into the client bundle at build time, so they now live in
+GitHub rather than in this instance's `.env`.
+
+By hand on the instance:
+
 ```bash
 cd /opt/tuff-stats
-git pull --ff-only origin main
-docker compose --env-file deploy/lightsail/.env build --no-cache app
-docker compose --env-file deploy/lightsail/.env up -d
+sudo git pull --ff-only origin main
+sudo docker compose --env-file deploy/lightsail/.env pull app
+sudo docker compose --env-file deploy/lightsail/.env up -d
 ```
 
-Or run **Deploy Lightsail** from GitHub Actions (`workflow_dispatch`) after adding repository secrets `LIGHTSAIL_HOST` (static IP or `stats.playtuff.ca`), `LIGHTSAIL_USER` (`ubuntu`), and `LIGHTSAIL_SSH_KEY`.
+**Rollback** to any previously built commit — set the tag and restart, no build:
+
+```bash
+echo 'APP_IMAGE=ghcr.io/ashleystreet/tuff-stats-mvp:<commit-sha>' | sudo tee -a deploy/lightsail/.env
+sudo docker compose --env-file deploy/lightsail/.env up -d
+```
+
+**Swap.** Add 2 GB regardless — 1 GB with no swap is tight once season caches
+warm, and it is what turned a slow build into an unreachable box:
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile \
+  && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
 
 ## Render
 

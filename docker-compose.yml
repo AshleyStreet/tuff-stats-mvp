@@ -1,12 +1,14 @@
 services:
   app:
-    build:
-      context: .
-      args:
-        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID:-}
-        VITE_PLAUSIBLE_DOMAIN: ${VITE_PLAUSIBLE_DOMAIN:-}
-        VITE_PLAUSIBLE_SCRIPT_SRC: ${VITE_PLAUSIBLE_SCRIPT_SRC:-}
-    image: afterwhistle:local
+    # Built and pushed by .github/workflows/build-image.yml — the instance only
+    # ever pulls it. Compiling on the 1 GB box exhausted its memory badly enough
+    # that sshd could not fork, so nothing here should reintroduce a build.
+    #
+    # Roll back by pinning a commit sha in deploy/lightsail/.env:
+    #   APP_IMAGE=ghcr.io/ashleystreet/tuff-stats-mvp:<sha>
+    # Build locally instead:
+    #   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+    image: ${APP_IMAGE:-ghcr.io/ashleystreet/tuff-stats-mvp:latest}
     restart: unless-stopped
     expose:
       - "4000"

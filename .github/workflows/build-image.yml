@@ -1,0 +1,64 @@
+name: Build image
+
+# Builds the container on GitHub's runners and publishes it to GHCR, so the
+# 1 GB Lightsail instance never has to compile anything. Building on the box
+# exhausted its memory badly enough that sshd could not fork a new session.
+#
+# Building on every push to main keeps an image ready to go; shipping it is
+# still a deliberate act (Deploy Lightsail, workflow_dispatch).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # GHCR requires a lowercase image path, and the owner login is mixed case.
+      - name: Resolve image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # :latest is what the instance pulls; the sha tag is what you roll back to.
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          # VITE_* values are baked into the client bundle at build time, so they
+          # move here from the instance's .env. They ship in a public bundle —
+          # repository variables, not secrets.
+          build-args: |
+            VITE_GA_MEASUREMENT_ID=${{ vars.VITE_GA_MEASUREMENT_ID }}
+            VITE_PLAUSIBLE_DOMAIN=${{ vars.VITE_PLAUSIBLE_DOMAIN }}
+            VITE_PLAUSIBLE_SCRIPT_SRC=${{ vars.VITE_PLAUSIBLE_SCRIPT_SRC }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "Pushed \`${{ steps.image.outputs.name }}:latest\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Rollback tag: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

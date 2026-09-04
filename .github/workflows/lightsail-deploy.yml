@@ -1,23 +1,46 @@
 name: Deploy Lightsail
 
+# Pulls the image built by "Build image" and restarts the stack. The instance
+# no longer compiles anything — a build on the 1 GB box exhausted its memory
+# badly enough that sshd could not fork a new session, while the running
+# containers kept serving.
+
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (a commit sha to roll back, or latest)"
+        required: false
+        default: latest
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Pull and rebuild on the instance
+      - name: Pull and restart on the instance
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          envs: IMAGE_TAG
           script: |
             set -euo pipefail
             cd /opt/tuff-stats
+            # compose files, Caddyfile and deploy scripts still come from git;
+            # only the application image comes from the registry.
             sudo git fetch origin
             sudo git checkout main
             sudo git pull --ff-only origin main
-            sudo docker compose --env-file deploy/lightsail/.env up -d --build
+
+            export APP_IMAGE="ghcr.io/ashleystreet/tuff-stats-mvp:${IMAGE_TAG}"
+            echo "Deploying $APP_IMAGE"
+
+            sudo -E docker compose --env-file deploy/lightsail/.env pull app
+            sudo -E docker compose --env-file deploy/lightsail/.env up -d
             curl -fsS --retry 8 --retry-delay 5 http://127.0.0.1/api/health
+
+            # Keep the disk from filling with superseded images on a 1 GB box.
+            sudo docker image prune -f
