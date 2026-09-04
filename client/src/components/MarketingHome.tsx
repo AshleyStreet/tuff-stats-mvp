@@ -22,11 +22,11 @@ const FAQS = [
   },
   {
     q: "Can our league look like our club?",
-    a: "Yes. Your colors, your name, your link. Fans never see another league’s branding."
+    a: "Yes. Your colors, your name, your link. Fans never see another league’s branding on Club plans."
   },
   {
     q: "How much does it cost?",
-    a: "Pricing depends on how many leagues and sports you run. We’re still finalizing packages — book a demo and we’ll walk through what fits your club."
+    a: "League boards start at $39/month on your Afterwhistle subdomain. Club plans with a custom domain and white-label branding are $99/month. We also offer a free Pilot while you try it out. One-time setup applies for new leagues — book a demo for a quote."
   },
   {
     q: "How long until we’re live?",
@@ -37,6 +37,58 @@ const FAQS = [
     a: "No. We only read what you already publish. We don’t edit or overwrite anything on your site."
   }
 ] as const;
+
+const PRICING = [
+  {
+    id: "pilot",
+    name: "Pilot",
+    price: "Free",
+    period: "to try it",
+    blurb: "See your league on a board before you commit.",
+    features: [
+      "yourleague.afterwhistle.ca",
+      "Standings, schedule & player cards",
+      "Shareable links for players & games",
+      "Afterwhistle footer badge"
+    ],
+    cta: "Start a pilot",
+    featured: false
+  },
+  {
+    id: "league",
+    name: "League",
+    price: "$39",
+    period: "/ month",
+    blurb: "A branded board fans will actually bookmark.",
+    features: [
+      "Custom colors & club logo",
+      "Full stats board + trading cards",
+      "SEO & social link previews",
+      "Email support"
+    ],
+    cta: "Get League",
+    featured: true
+  },
+  {
+    id: "club",
+    name: "Club",
+    price: "$99",
+    period: "/ month",
+    blurb: "For multi-league clubs that want their own domain.",
+    features: [
+      "Custom domain (stats.yourclub.ca)",
+      "White-label — no Afterwhistle badge",
+      "Captain tools & bulk card print",
+      "Priority onboarding & support"
+    ],
+    cta: "Get Club",
+    featured: false
+  }
+] as const;
+
+function pricingMail(plan: string) {
+  return `mailto:${DEMO_MAIL}?subject=${encodeURIComponent(`Afterwhistle ${plan} plan`)}`;
+}
 
 function trackMarketingClick(target: string) {
   trackEvent("marketing_click", { target });
@@ -69,6 +121,7 @@ export function MarketingHome() {
         <nav className="aw-nav" aria-label="Primary">
           <a href="#how" onClick={() => trackMarketingClick("nav_how")}>How it works</a>
           <a href="#product" onClick={() => trackMarketingClick("nav_product")}>The board</a>
+          <a href="#pricing" onClick={() => trackMarketingClick("nav_pricing")}>Pricing</a>
           <a href="#faq" onClick={() => trackMarketingClick("nav_faq")}>FAQ</a>
           <a className="aw-nav-cta" href={DEMO_HREF}
             onClick={() => trackMarketingClick("book_demo")}>
@@ -278,6 +331,69 @@ export function MarketingHome() {
               <p>Softball one night, soccer the next — the board shows the right stats for each.</p>
             </li>
           </ul>
+        </section>
+
+        <section className="aw-section aw-pricing" id="pricing" aria-labelledby="aw-pricing-title">
+          <div className="aw-pricing-head">
+            <h2 id="aw-pricing-title" className="aw-section-title">
+              Simple pricing
+            </h2>
+            <p className="aw-section-lede">
+              TUFF runs free forever as our founding partner. Every other league gets the same board
+              — pick the plan that fits your club.
+            </p>
+          </div>
+
+          <div className="aw-pricing-founder">
+            <div className="aw-pricing-founder-copy">
+              <span className="aw-pricing-founder-label">Founding partner</span>
+              <strong>Toronto United Flag Football</strong>
+              <p>
+                Full board, shareable player links, and trading cards — free for TUFF fans, always.
+              </p>
+            </div>
+            <a
+              className="aw-btn aw-btn-ghost aw-pricing-founder-link"
+              href={LIVE_LEAGUE_URL}
+              onClick={() => trackMarketingClick("pricing_tuff_demo")}
+            >
+              See TUFF live
+            </a>
+          </div>
+
+          <div className="aw-pricing-grid">
+            {PRICING.map((plan) => (
+              <article
+                key={plan.id}
+                className={`aw-price-card${plan.featured ? " aw-price-card--featured" : ""}`}
+              >
+                {plan.featured ? <span className="aw-price-badge">Most popular</span> : null}
+                <h3 className="aw-price-name">{plan.name}</h3>
+                <p className="aw-price-amount">
+                  <span>{plan.price}</span>
+                  <small>{plan.period}</small>
+                </p>
+                <p className="aw-price-blurb">{plan.blurb}</p>
+                <ul className="aw-price-features">
+                  {plan.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                <a
+                  className={`aw-btn ${plan.featured ? "aw-btn-primary" : "aw-btn-ghost"} aw-price-cta`}
+                  href={pricingMail(plan.name)}
+                  onClick={() => trackMarketingClick(`pricing_${plan.id}`)}
+                >
+                  {plan.cta}
+                </a>
+              </article>
+            ))}
+          </div>
+
+          <p className="aw-pricing-note">
+            One-time setup from $299 for SportsPress wiring, branding, and go-live. Founding leagues
+            outside TUFF may qualify for a launch discount — ask when you book a demo.
+          </p>
         </section>
 
         <section className="aw-mid-cta" aria-label="Book a demo">

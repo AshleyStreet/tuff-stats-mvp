@@ -9,12 +9,9 @@ export function PrintSheet({ cards }: { cards: TradingCardData[] }) {
   return (
     <div className="print-sheet is-ready" aria-hidden="true">
       {pages.map((page, index) => (
-        <section
-          className={`print-page${cards.length === 1 ? " single" : ""}`}
-          key={`print-page-${index}`}
-        >
+        <section className={`print-page${cards.length === 1 ? " single" : ""}`} key={`print-page-${index}`}>
           {page.map((card) => (
-            <TradingCard key={`${card.id}-${card.season}`} card={card} />
+            <TradingCard card={card} key={`${card.id}-${card.season}`} />
           ))}
         </section>
       ))}

@@ -30,11 +30,13 @@ export function leagueSeoDescription(league: PublicLeague, season?: string) {
 }
 
 export function marketingSeo(origin: string): PageSeo {
+  const base = origin.endsWith("/") ? origin.slice(0, -1) : origin;
   return {
     title: "Afterwhistle · League stats boards",
     description:
       "Standings, schedules, and player cards for rec leagues — under your club's name and colors, without replacing your existing website.",
     canonical: origin.endsWith("/") ? origin : `${origin}/`,
+    image: `${base}/marketing/aw-hero-field.png`,
     siteName: "Afterwhistle",
     type: "website"
   };
