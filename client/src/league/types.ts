@@ -73,6 +73,7 @@ export type AdminTenant = {
   franchiseTeamNames: string[];
   sourceOrigin?: string;
   whiteLabel: boolean;
+  hasRefreshToken: boolean;
 };
 
 export type SourceProbeResult = {

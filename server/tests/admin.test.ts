@@ -88,6 +88,17 @@ describe("admin tenant overlays", () => {
     expect(players.meta.teams).toEqual(["Eagles", "Foxes"]);
   });
 
+  it("round-trips a refresh token as hasRefreshToken without ever echoing the raw value", () => {
+    const withToken = updateAdminTenant("tuff", { refreshToken: "tuff-secret" });
+    expect(withToken.hasRefreshToken).toBe(true);
+    expect(JSON.stringify(withToken)).not.toContain("tuff-secret");
+    expect(getLeagueBySlug("tuff")?.refreshToken).toBe("tuff-secret");
+
+    const cleared = updateAdminTenant("tuff", { refreshToken: "" });
+    expect(cleared.hasRefreshToken).toBe(false);
+    expect(getLeagueBySlug("tuff")?.refreshToken).toBeUndefined();
+  });
+
   it("rejects a duplicate hostname and locked adapter changes", async () => {
     await expect(
       createAdminTenant({
