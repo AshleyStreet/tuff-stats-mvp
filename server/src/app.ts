@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { getAdapter } from "./adapters/resolve.js";
 import { toLeagueRef, type StatKey } from "./domain/types.js";
 import { AdminError, createAdminTenant, listAdminTenants, probeAdminSourceUrl, updateAdminTenant } from "./leagues/admin.js";
-import { resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
+import { getLeagueByHostname, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
@@ -43,12 +43,28 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
   app.use(cors());
   app.use(express.json());
 
+  /** Warn once per unresolved production host, not once per request. */
+  const warnedUnresolvedHosts = new Set<string>();
+
   function tenant(req: express.Request): { league: League; adapter: LeagueDataAdapter } {
+    const host = req.get("host");
+    const forwardedHost = req.get("x-forwarded-host");
     const league = resolveRequestLeague({
-      host: req.get("host"),
-      forwardedHost: req.get("x-forwarded-host"),
+      host,
+      forwardedHost,
       slug: String(req.query.league ?? "")
     });
+
+    if (process.env.NODE_ENV === "production") {
+      const primaryHost = (forwardedHost?.split(",")[0] ?? host ?? "").trim();
+      if (primaryHost && !getLeagueByHostname(primaryHost) && !warnedUnresolvedHosts.has(primaryHost)) {
+        warnedUnresolvedHosts.add(primaryHost);
+        console.warn(
+          `Unrecognized tenant host "${primaryHost}" — falling back to ${league.slug}. Check DNS/hostname config if this is unexpected.`
+        );
+      }
+    }
+
     return { league, adapter: getAdapter(league) };
   }
 
