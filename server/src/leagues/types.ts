@@ -1,3 +1,4 @@
+import type { StatKey } from "../domain/types.js";
 import type { FixtureSeed } from "./fixture-seed.js";
 import type { SportIcon, StatPresentation } from "./sports/types.js";
 
@@ -64,6 +65,12 @@ export type LeagueSourceConfig = {
   defaultStatsListSuffix: string;
   statsListTokens: string[];
   excludeStatsSlugs: string[];
+  /**
+   * Raw source field name (lowercased) -> canonical StatKey. Merged over,
+   * and able to override, the shared default map in lib/stats.ts. Omit
+   * for tenants whose fields already match the shared map.
+   */
+  statMap?: Record<string, StatKey>;
   standings: {
     modernFromYear: number;
     modern: string[];

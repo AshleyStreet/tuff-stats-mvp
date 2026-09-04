@@ -79,6 +79,7 @@ export function cloneSourceConfig(source: LeagueSourceConfig): LeagueSourceConfi
     ...source,
     statsListTokens: [...source.statsListTokens],
     excludeStatsSlugs: [...source.excludeStatsSlugs],
+    statMap: source.statMap ? { ...source.statMap } : undefined,
     standings: {
       ...source.standings,
       modern: [...source.standings.modern],
