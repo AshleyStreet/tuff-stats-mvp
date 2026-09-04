@@ -1,4 +1,5 @@
 import { resetCsvAdapters } from "../adapters/csv/index.js";
+import { resetEsportsdeskAdapters } from "../adapters/esportsdesk/index.js";
 import { resetFixtureAdapters } from "../adapters/fixture/index.js";
 import { resetSportspressAdapters } from "../adapters/sportspress/index.js";
 import { dummyFixtureSource, emptyFixtureSeed } from "./fixture-seed.js";
@@ -42,6 +43,7 @@ export function reloadTenants() {
   resetFixtureAdapters();
   resetSportspressAdapters();
   resetCsvAdapters();
+  resetEsportsdeskAdapters();
 }
 
 function leagueFromCreatedRecord(record: TenantRecord): League | undefined {
@@ -50,12 +52,15 @@ function leagueFromCreatedRecord(record: TenantRecord): League | undefined {
   const publicSeason = record.publicSeason?.trim() || "2026";
   const name = record.name.trim();
   const shortName = record.shortName.trim();
-  const adapter = record.adapter === "sportspress" || record.adapter === "csv" ? record.adapter : "fixture";
+  const adapter =
+    record.adapter === "sportspress" || record.adapter === "csv" || record.adapter === "esportsdesk"
+      ? record.adapter
+      : "fixture";
   const sport = normalizeSport(record.sport);
   const { sportIcon, presentation, label: sportLabel } = sportMeta(sport);
 
   const source =
-    (adapter === "sportspress" || adapter === "csv") && record.source
+    (adapter === "sportspress" || adapter === "csv" || adapter === "esportsdesk") && record.source
       ? cloneSourceConfig(record.source)
       : dummyFixtureSource({ slug: record.slug, publicSeason, franchiseTeamNames: teams });
   const fixture =

@@ -141,9 +141,16 @@ function assertUniqueHostnames(hostnames: string[], slug: string) {
 function resolveCreateAdapter(
   input: TenantWriteInput,
   probed?: SourceProbeResult
-): "fixture" | "sportspress" | "csv" {
+): "fixture" | "sportspress" | "csv" | "esportsdesk" {
   const requested = input.adapter?.trim().toLowerCase();
-  if (requested === "fixture" || requested === "sportspress" || requested === "csv") return requested;
+  if (
+    requested === "fixture" ||
+    requested === "sportspress" ||
+    requested === "csv" ||
+    requested === "esportsdesk"
+  ) {
+    return requested;
+  }
   if (probed?.adapter) return probed.adapter;
   if (input.source) return "sportspress";
   return "fixture";
@@ -171,7 +178,16 @@ async function resolveCreatePayload(input: TenantWriteInput) {
           : (() => {
               throw new AdminError(400, "A CSV source with at least a players URL is required.");
             })()
-        : undefined;
+        : adapter === "esportsdesk"
+          ? input.source?.esportsdesk?.clientId && input.source.esportsdesk.seasons?.length
+            ? input.source
+            : (() => {
+                throw new AdminError(
+                  400,
+                  "An eSportsDesk source needs a clientId and at least one season leagueId."
+                );
+              })()
+          : undefined;
 
   return { adapter, sport, sportIcon, source, probed };
 }

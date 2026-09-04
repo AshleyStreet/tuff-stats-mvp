@@ -52,6 +52,35 @@ export type CsvSourceConfig = {
   scheduleUrl?: string;
 };
 
+/** One eSportsDesk season. Each season is its own leagueID on their side. */
+export type EsportsdeskSeasonSlice = {
+  /** Season key shown in the UI, e.g. "2026". */
+  key: string;
+  label: string;
+  /** eSportsDesk `leagueID` for this season. */
+  leagueId: string;
+};
+
+/**
+ * Options for adapter: "esportsdesk". Their sites are server-rendered ColdFusion
+ * (`*.cfm?leagueID=&clientID=`) with no API, so this is HTML table parsing.
+ */
+export type EsportsdeskSourceOptions = {
+  /** `clientID` — stable per league organisation. */
+  clientId: string;
+  /** Per-season leagueIDs. eSportsDesk has no in-page season selector. */
+  seasons: EsportsdeskSeasonSlice[];
+  /**
+   * Which scoring segment to read: 0 overall, 1 exhibition, 2 regular, 3 playoffs.
+   * Defaults to 2 (regular season), matching what their standings page shows.
+   */
+  gameType?: 0 | 1 | 2 | 3;
+  /** Stats page for this sport, e.g. "stats_football_flag.cfm". */
+  statsPage?: string;
+  /** Safety valve on the 20-per-page stats pagination. */
+  maxPlayerPages?: number;
+};
+
 /** Options for adapter: "sportspress" (Bush, Passion, …). TUFF ignores this block. */
 export type SportspressSourceOptions = {
   /** Env var that may override `origin` (e.g. BUSH_ORIGIN, PASSION_ORIGIN). */
@@ -100,6 +129,7 @@ export type LeagueSourceConfig = {
   franchiseTeamNames: string[];
   sportspress?: SportspressSourceOptions;
   csv?: CsvSourceConfig;
+  esportsdesk?: EsportsdeskSourceOptions;
 };
 
 export type League = {
@@ -115,7 +145,7 @@ export type League = {
   copy: LeagueCopy;
   sportIcon: SportIcon;
   presentation: StatPresentation;
-  adapter: "tuff" | "fixture" | "sportspress" | "csv";
+  adapter: "tuff" | "fixture" | "sportspress" | "csv" | "esportsdesk";
   source: LeagueSourceConfig;
   /** Present for created fixture tenants. Harbor uses the baked seed in the fixture adapter. */
   fixture?: FixtureSeed;

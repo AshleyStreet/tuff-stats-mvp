@@ -28,6 +28,15 @@ export const statKeys = [
   "re2PT",
   "ret2PT",
   "safety",
+  /**
+   * Aggregate flag/touch-football scoring, for sources that report a combined
+   * total instead of splitting by pass/run/reception (eSportsDesk leagues report
+   * TD / C1 / C2 only). Sources that split their scoring leave these at 0 and
+   * nothing changes for them; see nonQbPointsFromStats in lib/stats.ts.
+   */
+  "td",
+  "conv1",
+  "conv2",
   "ab",
   "r",
   "h",

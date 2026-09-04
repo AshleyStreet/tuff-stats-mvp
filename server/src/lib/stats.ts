@@ -44,6 +44,12 @@ export const headerMap: Record<string, StatKey> = {
   rettwopt: "ret2PT",
   safety: "safety",
   sty: "safety",
+  // eSportsDesk aggregate scoring columns.
+  td: "td",
+  tds: "td",
+  c1: "conv1",
+  c2: "conv2",
+  sk: "sack",
   ab: "ab",
   r: "r",
   runs: "r",
@@ -154,9 +160,22 @@ export function hydrateStats(raw: Partial<Stats> & { att?: number } | null | und
 /**
  * Non-QB points from distinct TUFF columns:
  * receiving TDs (6) + receiving 1-pt conversions + receiving 2-pt conversions (×2).
+ *
+ * Sources that only publish aggregate scoring (eSportsDesk: TD/C1/C2) land in
+ * td/conv1/conv2 and are scored the same way. Split-scoring sources leave those
+ * at 0, so their totals are unchanged.
  */
-export function nonQbPointsFromStats(stats: Pick<Stats, "recTD" | "re1PT" | "re2PT">): number {
-  return stats.recTD * 6 + stats.re1PT + stats.re2PT * 2;
+export function nonQbPointsFromStats(
+  stats: Pick<Stats, "recTD" | "re1PT" | "re2PT" | "td" | "conv1" | "conv2">
+): number {
+  return (
+    stats.recTD * 6 +
+    stats.re1PT +
+    stats.re2PT * 2 +
+    stats.td * 6 +
+    stats.conv1 +
+    stats.conv2 * 2
+  );
 }
 
 export function buildPlayer(
@@ -166,7 +185,7 @@ export function buildPlayer(
 ): Player {
   const next = { ...stats, tpnqb: nonQbPointsFromStats(stats) };
   const games = Math.max(next.gms, 1);
-  const totalTouchdowns = next.paTD + next.ruTD + next.recTD + next.retTD;
+  const totalTouchdowns = next.paTD + next.ruTD + next.recTD + next.retTD + next.td;
   const totalPoints = next.tpnqb + next.tpqb;
   const id = extras.sourceId ? `${slugify(name)}-${extras.sourceId}` : slugify(name);
 
