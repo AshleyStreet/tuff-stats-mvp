@@ -55,6 +55,7 @@ describe("request tenant routing", () => {
     expect(resolveRequestLeague({ host: "passion.localhost:5173" }).slug).toBe("passion");
     expect(resolveRequestLeague({ host: "passion-soccer.com" }).slug).toBe("passion");
     expect(resolveRequestLeague({ host: "www.passion-soccer.com" }).slug).toBe("passion");
+    expect(resolveRequestLeague({ host: "passion.afterwhistle.ca" }).slug).toBe("passion");
   });
 
   it("uses X-Forwarded-Host when the proxy rewrites Host to the local API", () => {
