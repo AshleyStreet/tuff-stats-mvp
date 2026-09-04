@@ -32,7 +32,7 @@ export const passionLeague: League = {
   name: "Passion Soccer",
   shortName: "PASSION",
   sport: "soccer",
-  hostnames: ["passion.localhost", "passion-soccer.com", "www.passion-soccer.com"],
+  hostnames: ["passion.afterwhistle.ca", "passion.localhost", "passion-soccer.com", "www.passion-soccer.com"],
   serviceName: "passion-stats-api",
   branding: {
     logo: "/passion-logo.svg",

@@ -11,7 +11,7 @@ export const harborLeague: League = {
   name: "Harbor Flag Football",
   shortName: "HARBOR",
   sport: "flag-football",
-  hostnames: ["demo.localhost", "anotherleague.localhost"],
+  hostnames: ["demo.afterwhistle.ca", "demo.localhost", "anotherleague.localhost"],
   serviceName: "harbor-stats-api",
   branding: {
     logo: "/harbor-logo.svg",
