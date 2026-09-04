@@ -47,8 +47,8 @@ Copy `server/.env.example` to `server/.env` if you want to override defaults.
 
 ```env
 PORT=4000
+# Optional. Overrides TUFF's configured source URL (server/src/leagues/tuff.ts).
 TUFF_STATS_URL=https://www.playtuff.ca/list/2026-tuff-stats/
-TUFF_LIST_SLUG=2026-tuff-stats
 ADMIN_TOKEN=
 ```
 

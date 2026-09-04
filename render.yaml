@@ -13,8 +13,6 @@ services:
         value: production
       - key: TUFF_STATS_URL
         value: https://www.playtuff.ca/list/2026-tuff-stats/
-      - key: TUFF_LIST_SLUG
-        value: 2026-tuff-stats
       - key: ADMIN_TOKEN
         sync: false
 
