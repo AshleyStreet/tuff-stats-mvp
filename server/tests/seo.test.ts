@@ -10,6 +10,9 @@ import {
   renderSitemapXml,
   teamSeo
 } from "../src/lib/pageSeo.js";
+import { resolveLeaguePageSeo } from "../src/lib/resolvePageSeo.js";
+import type { League } from "../src/leagues/types.js";
+import type { LeagueDataAdapter } from "../src/adapters/types.js";
 
 const html = `<!doctype html><html><head><title>Old</title></head><body></body></html>`;
 
@@ -133,5 +136,69 @@ describe("pageSeo", () => {
 
     const tab = leagueTabSeo(league, "schedule", "https://tuff.afterwhistle.ca", "/schedule", "2026");
     expect(tab.title).toContain("Schedule");
+  });
+});
+
+describe("resolveLeaguePageSeo", () => {
+  it("canonicalizes team names against the requesting tenant's own aliases, not TUFF's", async () => {
+    // Neither "Sea Rhinos" nor "Bay Rhinos" is this tenant's alias for the other — they're
+    // two distinct franchises that both happen to end in "Rhinos", a TUFF team name. If team
+    // SEO ever falls back to TUFF's alias list, both collapse onto "Rhinos" and the standings
+    // lookup silently returns whichever team happens to come first.
+    const league = {
+      id: "riverdale",
+      slug: "riverdale",
+      name: "Riverdale Flag Football",
+      shortName: "RIVERDALE",
+      sport: "flag-football",
+      hostnames: ["riverdale.localhost"],
+      serviceName: "riverdale-stats-api",
+      branding: { logo: "", logoAlt: "Riverdale", primaryColor: "#000000", secondaryColor: "#ffffff" },
+      publicSeason: "2026",
+      copy: {
+        documentTitle: "Riverdale Stats",
+        tagline: "RIVERDALE",
+        loadErrorTitle: "Couldn’t load Riverdale.",
+        profileLinkLabel: "Open original Riverdale profile",
+        recapLinkLabel: "Open original Riverdale recap",
+        htmlSourceLabel: "Riverdale table"
+      },
+      sportIcon: "football",
+      presentation: {} as never,
+      adapter: "fixture",
+      source: { franchiseTeamNames: ["Sea Rhinos", "Bay Rhinos"] } as never
+    } as League;
+
+    const adapter: LeagueDataAdapter = {
+      leagueId: "riverdale",
+      getSeasons: async () => [],
+      getPlayers: async () => ({
+        players: [],
+        meta: {
+          source: "fixture",
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          total: 0,
+          teams: ["Sea Rhinos", "Bay Rhinos"],
+          season: "2026",
+          seasonLabel: "2026 Season",
+          standings: [
+            { name: "Sea Rhinos", wins: 10, losses: 0, ties: 0, pct: 1, pointsFor: 0, pointsAgainst: 0, netPoints: 0, standingsPoints: 0 },
+            { name: "Bay Rhinos", wins: 0, losses: 10, ties: 0, pct: 0, pointsFor: 0, pointsAgainst: 0, netPoints: 0, standingsPoints: 0 }
+          ]
+        }
+      }),
+      getStandings: async () => [],
+      getSchedule: async () => ({ season: "2026", games: [], meta: { fetchedAt: "", total: 0 } }),
+      getGame: async () => null,
+      getPlayerProfile: async () => null,
+      getPlayerGameLog: async () => null,
+      refresh: async () => ({ refreshed: [] }) as never,
+      warm: async () => ({ warmed: [], failed: [] }),
+      status: () => ({}) as never
+    };
+
+    const seo = await resolveLeaguePageSeo(league, adapter, "https://riverdale.afterwhistle.ca", "/teams/bay-rhinos");
+    expect(seo.description).toContain("0-10");
+    expect(seo.description).not.toContain("10-0");
   });
 });

@@ -27,7 +27,7 @@ export async function resolveLeaguePageSeo(
     if (route.tab === "players" && route.playerId) {
       const profile = await adapter.getPlayerProfile(route.playerId);
       if (profile) {
-        const image = await teamLogoForProfile(adapter, profile, season);
+        const image = await teamLogoForProfile(adapter, profile, season, league.source.franchiseTeamNames);
         return playerSeo(
           publicLeague,
           profile,
@@ -47,8 +47,10 @@ export async function resolveLeaguePageSeo(
       ];
       const teamName = resolveTeamName(route.teamSlug, names);
       if (teamName) {
+        const aliases = league.source.franchiseTeamNames;
         const standing = players?.meta.standings?.find(
-          (row) => canonicalTeamName(row.name).toLowerCase() === canonicalTeamName(teamName).toLowerCase()
+          (row) =>
+            canonicalTeamName(row.name, aliases).toLowerCase() === canonicalTeamName(teamName, aliases).toLowerCase()
         );
         return teamSeo(
           publicLeague,
@@ -57,7 +59,7 @@ export async function resolveLeaguePageSeo(
           buildAppPath({ tab: "teams", teamSlug: slugifyTeam(teamName), season }),
           season,
           standing,
-          players?.meta.teamLogos?.[teamName] ?? players?.meta.teamLogos?.[canonicalTeamName(teamName)]
+          players?.meta.teamLogos?.[teamName] ?? players?.meta.teamLogos?.[canonicalTeamName(teamName, aliases)]
         );
       }
     }
@@ -138,13 +140,14 @@ async function loadPlayersSnapshot(adapter: LeagueDataAdapter, season: string) {
 async function teamLogoForProfile(
   adapter: LeagueDataAdapter,
   profile: { currentTeam?: string; seasons: Array<{ season: string; team?: string }> },
-  season: string
+  season: string,
+  aliases: string[]
 ) {
   try {
     const players = await loadPlayersSnapshot(adapter, season);
     const team = profile.seasons.find((row) => row.season === season)?.team ?? profile.currentTeam;
     if (!team || !players?.meta.teamLogos) return undefined;
-    return players.meta.teamLogos[team] ?? players.meta.teamLogos[canonicalTeamName(team)];
+    return players.meta.teamLogos[team] ?? players.meta.teamLogos[canonicalTeamName(team, aliases)];
   } catch {
     return undefined;
   }
