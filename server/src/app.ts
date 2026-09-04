@@ -113,6 +113,26 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
     return isAdmin(req);
   }
 
+  /**
+   * Public read endpoints only — never /api/admin/*, /api/health or /api/status.
+   * Express already sends an ETag, so repeat reads were cheap on the wire but still
+   * cost a round-trip (and a full payload rebuild server-side) every navigation.
+   * `private` because a response is resolved from the request's Host: these must not
+   * land in a shared cache that might be keyed on path alone and serve one tenant's
+   * board to another. A forced refresh is an admin action and is never cached.
+   */
+  const CACHEABLE_READ_PATH = /^\/api\/(league|seasons|players|schedule|games|leaders)(\/|$)/;
+
+  app.use((req, res, next) => {
+    // HEAD must answer with the same headers as GET, so accept both.
+    if ((req.method !== "GET" && req.method !== "HEAD") || !CACHEABLE_READ_PATH.test(req.path)) return next();
+    res.setHeader(
+      "Cache-Control",
+      req.query.refresh === "1" ? "no-store" : "private, max-age=60, stale-while-revalidate=300"
+    );
+    next();
+  });
+
   app.get("/api/league", (req, res) => {
     res.json(toPublicLeague(tenant(req).league));
   });
@@ -362,7 +382,19 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
       }
     });
 
-    app.use(express.static(clientDist, { index: false }));
+    app.use(
+      express.static(clientDist, {
+        index: false,
+        setHeaders(res, filePath) {
+          // Vite fingerprints everything under /assets/, so those URLs can never
+          // change meaning — let the browser keep them without revalidating.
+          // Everything else (favicons, logos, manifests) keeps the default.
+          if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        }
+      })
+    );
 
     async function sendSpa(req: express.Request, res: express.Response) {
       const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";

@@ -52,6 +52,19 @@ const STATS_LIST_SUFFIX = league.source.defaultStatsListSuffix;
 const LIST_META_FIELDS = "id,slug,title,seasons,link,modified,modified_gmt";
 const TEAM_ENRICHMENT_VERSION = "4";
 
+/**
+ * How long an upstream freshness answer ("is SportsPress newer than our snapshot?")
+ * stays good for. Each such check costs a round-trip, and several call sites ask the
+ * same question per request — without this window every cache *hit* still paid for a
+ * handful of sequential SportsPress calls before serving memory. Admin refresh
+ * (`force`) always bypasses it; see refreshSeasonData.
+ */
+const REVALIDATE_TTL_MS = Math.max(0, Number(process.env.CACHE_TTL_MS ?? 300_000));
+
+function isFresh(recordedAt: number) {
+  return Date.now() - recordedAt < REVALIDATE_TTL_MS;
+}
+
 function readDisk<T>(name: string) {
   return readLeagueCache<T>(league.slug, name);
 }
@@ -198,18 +211,42 @@ async function fetchAllLists(force = false): Promise<SpList[]> {
   return listsInflight;
 }
 
-async function fetchListsFingerprint(): Promise<string | null> {
-  const lists: SpList[] = [];
-  for (let page = 1; page <= 5; page += 1) {
-    const batch = await fetchJson<SpList[]>(
-      `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?per_page=100&page=${page}&_fields=id,slug,modified,modified_gmt`,
-      12000
-    );
-    if (!batch?.length) break;
-    lists.push(...batch);
-    if (batch.length < 100) break;
+let listsFingerprintMemo: { value: string | null; at: number } | null = null;
+let listsFingerprintInflight: Promise<string | null> | null = null;
+
+/**
+ * Paginates the whole list index, so it is the most expensive freshness check we
+ * make — and both getSeasons and fetchAllLists ask for it on the same request.
+ * Memoized for REVALIDATE_TTL_MS and coalesced across concurrent callers.
+ */
+async function fetchListsFingerprint(force = false): Promise<string | null> {
+  if (!force) {
+    if (listsFingerprintMemo && isFresh(listsFingerprintMemo.at)) return listsFingerprintMemo.value;
+    if (listsFingerprintInflight) return listsFingerprintInflight;
   }
-  return lists.length ? listFingerprint(lists) : null;
+
+  listsFingerprintInflight = (async () => {
+    const lists: SpList[] = [];
+    for (let page = 1; page <= 5; page += 1) {
+      const batch = await fetchJson<SpList[]>(
+        `${SITE_ORIGIN}/wp-json/sportspress/v2/lists?per_page=100&page=${page}&_fields=id,slug,modified,modified_gmt`,
+        12000
+      );
+      if (!batch?.length) break;
+      lists.push(...batch);
+      if (batch.length < 100) break;
+    }
+    return lists.length ? listFingerprint(lists) : null;
+  })()
+    .then((value) => {
+      listsFingerprintMemo = { value, at: Date.now() };
+      return value;
+    })
+    .finally(() => {
+      listsFingerprintInflight = null;
+    });
+
+  return listsFingerprintInflight;
 }
 
 function seasonsFromLists(lists: SpList[]): SeasonInfo[] {
@@ -516,21 +553,44 @@ async function fromHtml(season: SeasonInfo): Promise<Player[]> {
   return players;
 }
 
-async function getSeasonFingerprint(season: SeasonInfo): Promise<string | null> {
-  const statsMeta = await fetchStatsListMeta(season.slug);
-  if (!statsMeta) return null;
+const seasonFingerprintMemo = new Map<string, { value: string | null; at: number }>();
+const seasonFingerprintInflight = new Map<string, Promise<string | null>>();
 
-  let rosterMetas: SpList[] = [];
-  try {
-    const lists = await fetchAllLists();
-    rosterMetas = lists.filter(
-      (list) => !isStatsList(list, league.source) && list.slug.toLowerCase().startsWith(`${season.year}-`)
-    );
-  } catch {
-    rosterMetas = [];
+async function getSeasonFingerprint(season: SeasonInfo, force = false): Promise<string | null> {
+  const key = season.year;
+  if (!force) {
+    const memo = seasonFingerprintMemo.get(key);
+    if (memo && isFresh(memo.at)) return memo.value;
+    const pending = seasonFingerprintInflight.get(key);
+    if (pending) return pending;
   }
 
-  return `${listFingerprint([statsMeta, ...rosterMetas])}|te:${TEAM_ENRICHMENT_VERSION}`;
+  const run = (async () => {
+    const statsMeta = await fetchStatsListMeta(season.slug);
+    if (!statsMeta) return null;
+
+    let rosterMetas: SpList[] = [];
+    try {
+      const lists = await fetchAllLists();
+      rosterMetas = lists.filter(
+        (list) => !isStatsList(list, league.source) && list.slug.toLowerCase().startsWith(`${season.year}-`)
+      );
+    } catch {
+      rosterMetas = [];
+    }
+
+    return `${listFingerprint([statsMeta, ...rosterMetas])}|te:${TEAM_ENRICHMENT_VERSION}`;
+  })()
+    .then((value) => {
+      seasonFingerprintMemo.set(key, { value, at: Date.now() });
+      return value;
+    })
+    .finally(() => {
+      seasonFingerprintInflight.delete(key);
+    });
+
+  seasonFingerprintInflight.set(key, run);
+  return run;
 }
 
 function seasonCacheName(year: string) {
@@ -630,6 +690,40 @@ async function fetchStandingsMeta(slug: string) {
   ).then((rows) => rows?.[0] ?? null);
 }
 
+const standingsFingerprintMemo = new Map<string, { value: string | null; at: number }>();
+const standingsFingerprintInflight = new Map<string, Promise<string | null>>();
+
+/**
+ * Probes the candidate table slugs in parallel — first candidate that exists wins,
+ * same precedence as trying them in order, without paying a round-trip per miss.
+ */
+async function fetchStandingsFingerprint(year: string, force = false): Promise<string | null> {
+  if (!force) {
+    const memo = standingsFingerprintMemo.get(year);
+    if (memo && isFresh(memo.at)) return memo.value;
+    const pending = standingsFingerprintInflight.get(year);
+    if (pending) return pending;
+  }
+
+  const run = (async () => {
+    const metas = await Promise.all(
+      standingsSlugCandidates(year, league.source).map((slug) => fetchStandingsMeta(slug))
+    );
+    const meta = metas.find((row) => row);
+    return meta ? listFingerprint([meta]) : null;
+  })()
+    .then((value) => {
+      standingsFingerprintMemo.set(year, { value, at: Date.now() });
+      return value;
+    })
+    .finally(() => {
+      standingsFingerprintInflight.delete(year);
+    });
+
+  standingsFingerprintInflight.set(year, run);
+  return run;
+}
+
 export async function getStandings(force = false, seasonYear?: string): Promise<TeamStanding[]> {
   const year = (seasonYear ?? DEFAULT_SEASON).trim() || DEFAULT_SEASON;
   const cached = readStandingsCache(year);
@@ -637,13 +731,7 @@ export async function getStandings(force = false, seasonYear?: string): Promise<
 
   let liveFingerprint: string | null = null;
   if (!force) {
-    for (const slug of slugs) {
-      const meta = await fetchStandingsMeta(slug);
-      if (meta) {
-        liveFingerprint = listFingerprint([meta]);
-        break;
-      }
-    }
+    liveFingerprint = await fetchStandingsFingerprint(year);
     if (cached && liveFingerprint && cached.fingerprint === liveFingerprint) {
       return cached.standings;
     }
@@ -952,7 +1040,9 @@ export async function getPlayers(
 
   try {
     const data = await fetchSeasonPlayers(season);
-    const fingerprint = liveFingerprint ?? (await getSeasonFingerprint(season)) ?? `fetched:${data.meta.fetchedAt}`;
+    // Force a real check here: this fingerprint labels data we just fetched, so a
+    // memoized (possibly pre-fetch) answer would mislabel it.
+    const fingerprint = liveFingerprint ?? (await getSeasonFingerprint(season, true)) ?? `fetched:${data.meta.fetchedAt}`;
     const finished = await finishPlayers(data);
     writeSeasonCache(season.year, fingerprint, finished);
     return finished;
@@ -1044,6 +1134,10 @@ export async function refreshSeasonData(seasonYear?: string) {
   scheduleCache.clear();
   gameBoxCache.clear();
   seasonBoxCache.clear();
+  // Drop remembered freshness answers so an admin refresh always re-checks upstream.
+  listsFingerprintMemo = null;
+  seasonFingerprintMemo.clear();
+  standingsFingerprintMemo.clear();
 
   if (seasonYear) {
     await getStandings(true, seasonYear);
