@@ -928,3 +928,329 @@ html.marketing body::before {
     align-items: start;
   }
 }
+
+/* ---- Interactive homepage demo -------------------------------------------
+   Renders the real PlayerCard/StatGrid components against a baked roster
+   (lib/demoLeague.ts), so this section is the product, not a screenshot. */
+
+.aw-demo {
+  border: 1px solid var(--aw-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(10, 18, 14, 0.92), rgba(6, 10, 8, 0.96));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.aw-demo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--aw-line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.aw-demo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font: 700 15px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.aw-demo-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(14, 124, 123, 0.25);
+}
+
+.aw-demo-season {
+  font: 600 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.9rem 1.1rem 0.6rem;
+}
+
+.aw-demo-search {
+  flex: 1 1 12rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--aw-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--aw-muted);
+}
+
+.aw-demo-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--aw-bone);
+  font: 500 14px Barlow, sans-serif;
+  outline: none;
+}
+
+.aw-demo-search input::placeholder { color: var(--aw-muted); }
+
+.aw-demo-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--aw-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.aw-demo-select span {
+  font: 600 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-demo-select select {
+  border: 0;
+  background: none;
+  color: var(--aw-bone);
+  font: 600 14px Barlow, sans-serif;
+  outline: none;
+  cursor: pointer;
+}
+
+.aw-demo-select option { background: var(--aw-ink-2); color: var(--aw-bone); }
+
+.aw-demo-teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 1.1rem 0.85rem;
+}
+
+.aw-demo-teams button {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--aw-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--aw-muted);
+  font: 600 12px Barlow, sans-serif;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.aw-demo-teams button:hover { color: var(--aw-bone); border-color: rgba(232, 239, 230, 0.3); }
+
+.aw-demo-teams button.active {
+  color: var(--aw-ink);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.aw-demo-leaders {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+  margin: 0 1.1rem 0.9rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--aw-line);
+  border-radius: 10px;
+  background: rgba(14, 124, 123, 0.1);
+}
+
+.aw-demo-leaders-label {
+  font: 700 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.aw-demo-leaders ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: leader;
+}
+
+.aw-demo-leaders li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  counter-increment: leader;
+  font: 500 13px Barlow, sans-serif;
+}
+
+.aw-demo-leaders li::before {
+  content: counter(leader);
+  font: 700 11px "Barlow Condensed", sans-serif;
+  color: var(--aw-muted);
+}
+
+.aw-demo-leaders li strong { color: var(--gold); font-weight: 700; }
+
+.aw-demo-body {
+  display: grid;
+  gap: 1rem;
+  padding: 0 1.1rem 1.1rem;
+}
+
+/* minmax(230px) matches .player-grid in styles.css — below that the card's
+   5-column mini grid and footer overflow, which clipped player names here. */
+.aw-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.75rem;
+  max-height: 30rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* The app's entry animation staggers only the first six cards; inside a
+   scrolling demo list that reads as jitter, so opt out here. */
+.aw-demo-grid .player-card { animation: none; }
+
+/* .player-card-top is a grid whose 1fr column defaults to min-width:auto, so
+   the ellipsis on .player-heading strong never engages and long names push the
+   card wider than its track. Scoped here rather than fixed in styles.css —
+   same latent issue exists app-wide but that is not this change's business. */
+.aw-demo-grid .player-heading { min-width: 0; }
+
+.aw-demo-empty { color: var(--aw-muted); font: 500 14px Barlow, sans-serif; }
+
+.aw-demo-detail {
+  border: 1px solid var(--aw-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.9rem;
+  max-height: 30rem;
+  overflow-y: auto;
+}
+
+.aw-demo-detail-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.7rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.aw-demo-detail-head strong {
+  display: block;
+  font: 700 20px/1.05 "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+}
+
+.aw-demo-detail-head span {
+  font: 600 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-demo-close {
+  border: 1px solid var(--aw-line);
+  border-radius: 8px;
+  background: none;
+  color: var(--aw-muted);
+  padding: 0.3rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.aw-demo-close:hover { color: var(--aw-bone); border-color: rgba(232, 239, 230, 0.3); }
+
+.aw-demo-group { margin-top: 1rem; }
+
+.aw-demo-group h4 {
+  margin: 0 0 0.5rem;
+  font: 700 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.aw-demo-rows { display: grid; gap: 0.2rem; }
+
+.aw-demo-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(232, 239, 230, 0.06);
+  font: 500 13px Barlow, sans-serif;
+}
+
+.aw-demo-row span { color: var(--aw-muted); }
+
+.aw-demo-standings h4 {
+  margin: 0 0 0.6rem;
+  font: 700 11px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.aw-demo-standings table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 13px Barlow, sans-serif;
+}
+
+.aw-demo-standings th {
+  text-align: right;
+  font: 700 10px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+  padding-bottom: 0.35rem;
+}
+
+.aw-demo-standings th:first-child,
+.aw-demo-standings td:first-child { text-align: left; }
+
+.aw-demo-standings td {
+  text-align: right;
+  padding: 0.3rem 0;
+  border-top: 1px solid rgba(232, 239, 230, 0.06);
+}
+
+.aw-demo-hint {
+  margin: 1rem 0 0;
+  color: var(--aw-muted);
+  font: 500 13px Barlow, sans-serif;
+}
+
+/* Hold the side panel back until the roster grid can still fit two 230px
+   cards beside it — splitting earlier squeezes the cards below their minimum. */
+@media (min-width: 1100px) {
+  .aw-demo-body { grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 1fr); align-items: start; }
+}
+
+.aw-product-head { max-width: 60ch; }
+.aw-product-head .aw-section-lede { margin-bottom: 2rem; max-width: none; }
+
+.aw-demo-caption {
+  margin: 1rem 0 0;
+  color: var(--aw-muted);
+  font-size: 0.95rem;
+  max-width: 60ch;
+}
