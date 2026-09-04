@@ -121,6 +121,8 @@ export type League = {
   fixture?: FixtureSeed;
   /** Club-plan tenants hide the "Stats by Afterwhistle" footer badge. */
   whiteLabel?: boolean;
+  /** Gate-able feature keys enabled for this tenant. See leagues/features.ts. */
+  features?: string[];
   /**
    * Per-tenant secret gating POST /api/admin/refresh and the refresh=1
    * bypasses for this tenant. When unset, the platform ADMIN_TOKEN is
@@ -143,6 +145,7 @@ export type PublicLeague = {
   presentation: StatPresentation;
   franchiseTeamNames: string[];
   whiteLabel?: boolean;
+  features: string[];
 };
 
 export function toPublicLeague(league: League): PublicLeague {
@@ -157,6 +160,7 @@ export function toPublicLeague(league: League): PublicLeague {
     sportIcon: league.sportIcon,
     presentation: league.presentation,
     franchiseTeamNames: league.source.franchiseTeamNames,
-    whiteLabel: league.whiteLabel
+    whiteLabel: league.whiteLabel,
+    features: league.features ?? []
   };
 }

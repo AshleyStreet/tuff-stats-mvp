@@ -28,6 +28,7 @@ export type TenantRecord = {
   sportIcon?: SportIcon;
   source?: LeagueSourceConfig;
   whiteLabel?: boolean;
+  features?: string[];
   refreshToken?: string;
 };
 
@@ -108,7 +109,8 @@ export function cloneLeague(league: League): League {
     branding: { ...league.branding },
     copy: { ...league.copy },
     source: cloneSourceConfig(league.source),
-    fixture: league.fixture ? structuredClone(league.fixture) : undefined
+    fixture: league.fixture ? structuredClone(league.fixture) : undefined,
+    features: league.features ? [...league.features] : undefined
   };
 }
 
@@ -132,6 +134,7 @@ export function applyTenantRecord(base: League, record: TenantRecord, builtIn: b
     next.copy = { ...next.copy, ...sanitizeCopy(record.copy) };
   }
   if (record.whiteLabel != null) next.whiteLabel = Boolean(record.whiteLabel);
+  if (record.features != null) next.features = [...record.features];
   if (record.refreshToken != null) next.refreshToken = String(record.refreshToken).trim() || undefined;
   if (!builtIn && record.franchiseTeamNames) {
     const teams = record.franchiseTeamNames.map((name) => String(name).trim()).filter(Boolean);
@@ -238,6 +241,7 @@ export function mergeTenantRecord(slug: string, kind: TenantRecordKind, patch: O
     sportIcon: patch.sportIcon ?? existing?.sportIcon,
     source: patch.source ?? existing?.source,
     whiteLabel: patch.whiteLabel ?? existing?.whiteLabel,
+    features: patch.features ?? existing?.features,
     refreshToken: patch.refreshToken ?? existing?.refreshToken
   };
   writeTenantRecord(record);

@@ -7,6 +7,7 @@ import {
   listLeagues,
   reloadTenants
 } from "./registry.js";
+import { FEATURE_KEYS } from "./features.js";
 import { probeSourceUrl, type SourceProbeResult } from "./probe.js";
 import { normalizeSport, sportMeta } from "./sport.js";
 import {
@@ -44,6 +45,7 @@ export type AdminTenant = {
   franchiseTeamNames: string[];
   sourceOrigin?: string;
   whiteLabel: boolean;
+  features: string[];
   /** Never echoes the raw token back — just whether one is configured. */
   hasRefreshToken: boolean;
 };
@@ -62,6 +64,7 @@ export type TenantWriteInput = {
   sourceUrl?: string;
   source?: LeagueSourceConfig;
   whiteLabel?: boolean;
+  features?: unknown;
   /** Set to a new token, or "" to clear it and fall back to the platform ADMIN_TOKEN. */
   refreshToken?: string;
 };
@@ -87,6 +90,7 @@ function toAdminTenant(league: League): AdminTenant {
           ? league.source.csv?.playersUrl
           : undefined,
     whiteLabel: Boolean(league.whiteLabel),
+    features: [...(league.features ?? [])],
     hasRefreshToken: Boolean(league.refreshToken?.trim())
   };
 }
@@ -105,6 +109,14 @@ function teamNames(raw: unknown) {
   if (raw == null) return undefined;
   const list = Array.isArray(raw) ? raw : String(raw).split(/[\n,]/);
   return list.map((item) => String(item).trim()).filter(Boolean);
+}
+
+/** Silently drops unknown keys so a stale client build can't wedge a typo into storage. */
+function featureList(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  const list = Array.isArray(raw) ? raw : String(raw).split(/[\n,]/);
+  const known = new Set<string>(FEATURE_KEYS);
+  return [...new Set(list.map((item) => String(item).trim()).filter((item) => known.has(item)))];
 }
 
 function brandingPatch(raw?: Partial<LeagueBranding>) {
@@ -206,6 +218,7 @@ export async function createAdminTenant(input: TenantWriteInput): Promise<AdminT
       sportIcon,
       source,
       whiteLabel: input.whiteLabel,
+      features: featureList(input.features),
       refreshToken: input.refreshToken,
       fixture:
         adapter === "fixture"
@@ -252,6 +265,7 @@ export function updateAdminTenant(slugInput: string, input: TenantWriteInput): A
       sport,
       sportIcon,
       whiteLabel: input.whiteLabel,
+      features: featureList(input.features),
       refreshToken: input.refreshToken
     });
   } catch (error) {

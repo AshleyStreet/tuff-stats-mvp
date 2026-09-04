@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, ExternalLink, Plus, Radar, RefreshCw, Save, Trash2 } from "lucide-react";
+import { FEATURE_KEYS, FEATURE_LABELS } from "../league/features";
 import type {
   AdminTenant,
   AdminTenantStatus,
@@ -39,6 +40,7 @@ type Draft = {
   htmlSourceLabel: string;
   franchiseTeamNames: string;
   whiteLabel: boolean;
+  features: string[];
   /** Write-only: never populated from the server. Blank + unchecked clear = leave unchanged. */
   refreshToken: string;
   clearRefreshToken: boolean;
@@ -68,6 +70,7 @@ const emptyDraft: Draft = {
   htmlSourceLabel: "",
   franchiseTeamNames: "",
   whiteLabel: false,
+  features: [],
   refreshToken: "",
   clearRefreshToken: false
 };
@@ -163,6 +166,7 @@ function toDraft(tenant: AdminTenant): Draft {
     htmlSourceLabel: tenant.copy.htmlSourceLabel,
     franchiseTeamNames: tenant.franchiseTeamNames.join(", "),
     whiteLabel: tenant.whiteLabel,
+    features: [...tenant.features],
     refreshToken: "",
     clearRefreshToken: false
   };
@@ -198,9 +202,14 @@ function payloadFromDraft(
       .filter(Boolean),
     branding,
     copy,
-    adapter: draft.adapter,
+    // Adapter can't be changed after creation (the server rejects any value that
+    // doesn't match), and toDraft() has to guess a Draft-representable adapter for
+    // tenants like TUFF whose real adapter ("tuff") isn't one of the create-time
+    // choices — so never resend it on update, only set it when creating.
+    ...(creating ? { adapter: draft.adapter } : {}),
     sport: draft.sport,
     whiteLabel: draft.whiteLabel,
+    features: draft.features,
     // Omit the key entirely when neither field was touched, so saving doesn't
     // accidentally clear an existing token the admin never meant to change.
     ...(draft.clearRefreshToken
@@ -921,6 +930,26 @@ export function AdminDashboard() {
                 />
                 White label (Club plan) — hides the "Stats by Afterwhistle" footer badge
               </label>
+              <div className="field-label admin-span">
+                Features
+                {FEATURE_KEYS.map((key) => (
+                  <label key={key} className="captain-check">
+                    <input
+                      type="checkbox"
+                      checked={draft.features.includes(key)}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          features: event.target.checked
+                            ? [...current.features, key]
+                            : current.features.filter((item) => item !== key)
+                        }))
+                      }
+                    />
+                    {FEATURE_LABELS[key]}
+                  </label>
+                ))}
+              </div>
               <label className="field-label admin-span">
                 Refresh token
                 <input
