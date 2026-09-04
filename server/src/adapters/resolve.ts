@@ -1,5 +1,6 @@
 import { getDefaultLeague } from "../leagues/registry.js";
 import type { League } from "../leagues/types.js";
+import { getCsvAdapter } from "./csv/index.js";
 import { getFixtureAdapter } from "./fixture/index.js";
 import { getSportspressAdapter } from "./sportspress/index.js";
 import { getTuffAdapter } from "./tuff/index.js";
@@ -15,6 +16,8 @@ export function getAdapter(league: League = getDefaultLeague()): LeagueDataAdapt
       return getFixtureAdapter(league);
     case "sportspress":
       return getSportspressAdapter(league);
+    case "csv":
+      return getCsvAdapter(league);
     case "tuff":
       return getTuffAdapter();
     default:

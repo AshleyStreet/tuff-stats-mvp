@@ -23,7 +23,7 @@ export type TenantRecord = {
   publicSeason?: string;
   franchiseTeamNames?: string[];
   fixture?: FixtureSeed;
-  adapter?: "fixture" | "sportspress";
+  adapter?: "fixture" | "sportspress" | "csv";
   sport?: string;
   sportIcon?: SportIcon;
   source?: LeagueSourceConfig;
@@ -88,6 +88,7 @@ export function cloneSourceConfig(source: LeagueSourceConfig): LeagueSourceConfi
     },
     modernTeamSlugs: [...source.modernTeamSlugs],
     franchiseTeamNames: [...source.franchiseTeamNames],
+    csv: source.csv ? { ...source.csv } : undefined,
     sportspress: source.sportspress
       ? {
           ...source.sportspress,

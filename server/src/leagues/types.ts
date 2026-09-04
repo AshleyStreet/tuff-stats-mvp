@@ -37,6 +37,21 @@ export type SportspressSeasonSlice = {
   divisionSlug?: string;
 };
 
+/**
+ * Options for adapter: "csv". Points at published spreadsheet exports (e.g. a
+ * Google Sheet via File > Share > Publish to web > CSV) instead of a live API.
+ * Each URL returns one row per (season, entity); `season` is a plain-text
+ * column so one sheet can hold every year. Headers are case-insensitive.
+ */
+export type CsvSourceConfig = {
+  /** Required. Columns: season, name, team, sourceid, profileurl, plus stat columns (see lib/stats.ts headerMap). */
+  playersUrl: string;
+  /** Optional. Columns: season, name (or team), wins, losses, ties, pointsfor (or pf), pointsagainst (or pa), streak. */
+  standingsUrl?: string;
+  /** Optional. Columns: season, id, date, status, title, venue, hometeam (or home), homescore, awayteam (or away), awayscore. */
+  scheduleUrl?: string;
+};
+
 /** Options for adapter: "sportspress" (Bush, Passion, …). TUFF ignores this block. */
 export type SportspressSourceOptions = {
   /** Env var that may override `origin` (e.g. BUSH_ORIGIN, PASSION_ORIGIN). */
@@ -84,6 +99,7 @@ export type LeagueSourceConfig = {
   modernTeamSlugs: string[];
   franchiseTeamNames: string[];
   sportspress?: SportspressSourceOptions;
+  csv?: CsvSourceConfig;
 };
 
 export type League = {
@@ -99,7 +115,7 @@ export type League = {
   copy: LeagueCopy;
   sportIcon: SportIcon;
   presentation: StatPresentation;
-  adapter: "tuff" | "fixture" | "sportspress";
+  adapter: "tuff" | "fixture" | "sportspress" | "csv";
   source: LeagueSourceConfig;
   /** Present for created fixture tenants. Harbor uses the baked seed in the fixture adapter. */
   fixture?: FixtureSeed;

@@ -68,12 +68,42 @@ export type AdminTenant = {
   publicSeason: string;
   copy: LeagueCopy;
   sportIcon: SportIcon;
-  adapter: "tuff" | "fixture" | "sportspress";
+  adapter: "tuff" | "fixture" | "sportspress" | "csv";
   builtIn: boolean;
   franchiseTeamNames: string[];
   sourceOrigin?: string;
   whiteLabel: boolean;
   hasRefreshToken: boolean;
+};
+
+/** Mirrors server/src/adapters/types.ts's AdapterStatus. */
+export type AdminTenantStatus = {
+  ok: boolean;
+  service: string;
+  uptimeSeconds: number;
+  warm: {
+    status: "idle" | "running" | "done";
+    warmed: string[];
+    failed: string[];
+    startedAt: string | null;
+    finishedAt: string | null;
+  };
+  cache: {
+    seasonsCached: number;
+    profilesCached: number;
+    seasons: Array<{
+      year: string;
+      fetchedAt: string;
+      playerCount: number;
+      fingerprint: string;
+    }>;
+  };
+};
+
+export type DeleteTenantResult = {
+  deleted: boolean;
+  reset: boolean;
+  tenant?: AdminTenant;
 };
 
 export type SourceProbeResult = {

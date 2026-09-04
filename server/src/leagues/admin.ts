@@ -80,7 +80,12 @@ function toAdminTenant(league: League): AdminTenant {
     adapter: league.adapter,
     builtIn: isBuiltInLeague(league.slug),
     franchiseTeamNames: [...league.source.franchiseTeamNames],
-    sourceOrigin: league.adapter === "sportspress" ? league.source.origin : undefined,
+    sourceOrigin:
+      league.adapter === "sportspress"
+        ? league.source.origin
+        : league.adapter === "csv"
+          ? league.source.csv?.playersUrl
+          : undefined,
     whiteLabel: Boolean(league.whiteLabel),
     hasRefreshToken: Boolean(league.refreshToken?.trim())
   };
@@ -121,9 +126,12 @@ function assertUniqueHostnames(hostnames: string[], slug: string) {
   }
 }
 
-function resolveCreateAdapter(input: TenantWriteInput, probed?: SourceProbeResult) {
+function resolveCreateAdapter(
+  input: TenantWriteInput,
+  probed?: SourceProbeResult
+): "fixture" | "sportspress" | "csv" {
   const requested = input.adapter?.trim().toLowerCase();
-  if (requested === "fixture" || requested === "sportspress") return requested;
+  if (requested === "fixture" || requested === "sportspress" || requested === "csv") return requested;
   if (probed?.adapter) return probed.adapter;
   if (input.source) return "sportspress";
   return "fixture";
@@ -145,7 +153,13 @@ async function resolveCreatePayload(input: TenantWriteInput) {
             "SportsPress source config is required. Probe the URL first or provide source settings."
           );
         })()
-      : undefined;
+      : adapter === "csv"
+        ? input.source?.csv?.playersUrl
+          ? input.source
+          : (() => {
+              throw new AdminError(400, "A CSV source with at least a players URL is required.");
+            })()
+        : undefined;
 
   return { adapter, sport, sportIcon, source, probed };
 }

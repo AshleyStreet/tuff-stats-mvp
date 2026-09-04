@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, ExternalLink, Plus, Radar, Save } from "lucide-react";
-import type { AdminTenant, LeagueBranding, LeagueCopy, SourceProbeResult } from "../league/types";
+import { ArrowLeft, ExternalLink, Plus, Radar, RefreshCw, Save, Trash2 } from "lucide-react";
+import type {
+  AdminTenant,
+  AdminTenantStatus,
+  DeleteTenantResult,
+  LeagueBranding,
+  LeagueCopy,
+  SourceProbeResult
+} from "../league/types";
 import { trackClick, trackEvent, trackExternalLink } from "../lib/analytics";
 
 const TOKEN_KEY = "admin-token";
+/** Mirrors the format server/src/leagues/store.ts's HOST_RE enforces. */
+const HOSTNAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const HEX6_RE = /^#[0-9a-f]{6}$/i;
 
 type Draft = {
   slug: string;
@@ -12,7 +22,10 @@ type Draft = {
   publicSeason: string;
   hostnames: string;
   sourceUrl: string;
-  adapter: "fixture" | "sportspress";
+  adapter: "fixture" | "sportspress" | "csv";
+  csvPlayersUrl: string;
+  csvStandingsUrl: string;
+  csvScheduleUrl: string;
   sport: string;
   logo: string;
   logoAlt: string;
@@ -39,6 +52,9 @@ const emptyDraft: Draft = {
   hostnames: "",
   sourceUrl: "",
   adapter: "fixture",
+  csvPlayersUrl: "",
+  csvStandingsUrl: "",
+  csvScheduleUrl: "",
   sport: "flag-football",
   logo: "/harbor-logo.svg",
   logoAlt: "",
@@ -65,6 +81,63 @@ function tenantOrigin(hostname: string) {
   return `${protocol}//${hostname}${port ? `:${port}` : ""}/`;
 }
 
+function hostnameLines(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function safeColorValue(hex: string): string {
+  return HEX6_RE.test(hex.trim()) ? hex.trim() : "#000000";
+}
+
+function slugifyTeam(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** Builds the LeagueSourceConfig shape the server expects for adapter: "csv" — most fields are unused by that adapter but required by the shared type. */
+function buildCsvSource(draft: Draft) {
+  const teams = draft.franchiseTeamNames
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return {
+    origin: "",
+    statsUrl: "",
+    userAgent: `${draft.slug.trim() || "csv"}-csv/0.1`,
+    defaultStatsListSuffix: "stats",
+    statsListTokens: [],
+    excludeStatsSlugs: [],
+    standings: {
+      modernFromYear: Number(draft.publicSeason.trim()) || new Date().getFullYear(),
+      modern: [],
+      legacy: []
+    },
+    modernTeamSlugs: teams.map(slugifyTeam),
+    franchiseTeamNames: teams,
+    csv: {
+      playersUrl: draft.csvPlayersUrl.trim(),
+      standingsUrl: draft.csvStandingsUrl.trim() || undefined,
+      scheduleUrl: draft.csvScheduleUrl.trim() || undefined
+    }
+  };
+}
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function toDraft(tenant: AdminTenant): Draft {
   return {
     slug: tenant.slug,
@@ -73,7 +146,10 @@ function toDraft(tenant: AdminTenant): Draft {
     publicSeason: tenant.publicSeason,
     hostnames: tenant.hostnames.join("\n"),
     sourceUrl: tenant.sourceOrigin ?? "",
-    adapter: tenant.adapter === "sportspress" ? "sportspress" : "fixture",
+    adapter: tenant.adapter === "sportspress" ? "sportspress" : tenant.adapter === "csv" ? "csv" : "fixture",
+    csvPlayersUrl: "",
+    csvStandingsUrl: "",
+    csvScheduleUrl: "",
     sport: tenant.sport,
     logo: tenant.branding.logo,
     logoAlt: tenant.branding.logoAlt,
@@ -133,7 +209,13 @@ function payloadFromDraft(
         ? { refreshToken: draft.refreshToken.trim() }
         : {}),
     ...(creating && draft.sourceUrl.trim() ? { sourceUrl: draft.sourceUrl.trim() } : {}),
-    ...(creating && probe?.source ? { source: probe.source } : {}),
+    ...(creating && draft.adapter === "csv"
+      ? draft.csvPlayersUrl.trim()
+        ? { source: buildCsvSource(draft) }
+        : {}
+      : creating && probe?.source
+        ? { source: probe.source }
+        : {}),
     ...(creating || draft.franchiseTeamNames.trim()
       ? { franchiseTeamNames: draft.franchiseTeamNames.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) }
       : {})
@@ -158,12 +240,33 @@ export function AdminDashboard() {
   const [configured, setConfigured] = useState(true);
   const [probing, setProbing] = useState(false);
   const [probe, setProbe] = useState<SourceProbeResult | null>(null);
+  const [status, setStatus] = useState<AdminTenantStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const selected = useMemo(
     () => (selectedSlug && selectedSlug !== "new" ? tenants.find((item) => item.slug === selectedSlug) : undefined),
     [selectedSlug, tenants]
   );
   const creating = selectedSlug === "new";
+
+  const draftHostnames = useMemo(() => hostnameLines(draft.hostnames), [draft.hostnames]);
+  const invalidHostnames = useMemo(
+    () => draftHostnames.filter((host) => !HOSTNAME_RE.test(host)),
+    [draftHostnames]
+  );
+  const hasAfterwhistleAlias = useMemo(
+    () => draftHostnames.some((host) => host.toLowerCase().endsWith(".afterwhistle.ca")),
+    [draftHostnames]
+  );
+
+  function addAfterwhistleAlias() {
+    const slug = draft.slug.trim().toLowerCase();
+    if (!slug) return;
+    const next = draft.hostnames.trim() ? `${draft.hostnames.trim()}\n${slug}.afterwhistle.ca` : `${slug}.afterwhistle.ca`;
+    setDraft({ ...draft, hostnames: next });
+  }
 
   async function loadTenants(nextToken = token) {
     setLoading(true);
@@ -207,6 +310,27 @@ export function AdminDashboard() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadStatus(slug: string) {
+    setStatusLoading(true);
+    try {
+      const response = await fetch(`/api/admin/tenants/${slug}/status`, { headers: tokenHeaders(token) });
+      setStatus(response.ok ? ((await response.json()) as AdminTenantStatus) : null);
+    } catch {
+      setStatus(null);
+    } finally {
+      setStatusLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!token || !selectedSlug || selectedSlug === "new") {
+      setStatus(null);
+      return;
+    }
+    void loadStatus(selectedSlug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSlug, token]);
 
   function signIn(event: FormEvent) {
     event.preventDefault();
@@ -317,6 +441,84 @@ export function AdminDashboard() {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function forceRefresh() {
+    if (!selectedSlug || creating) return;
+    setRefreshing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      // A tenant with its own refresh token rejects the platform sign-in token — use whatever's
+      // typed in the refresh-token field above if present, so this doubles as a way to test it.
+      const refreshAuth = draft.refreshToken.trim() || token;
+      const response = await fetch(`/api/admin/tenants/${selectedSlug}/refresh`, {
+        method: "POST",
+        headers: tokenHeaders(refreshAuth)
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; refreshed?: string[]; failed?: string[]; error?: string }
+        | null;
+      if (!response.ok || !body?.ok) throw new Error(body?.error ?? "Refresh failed");
+      trackEvent("admin_tenant_refresh", { tenant_slug: selectedSlug });
+      setNotice(
+        body.refreshed?.length
+          ? `Refreshed: ${body.refreshed.join(", ")}${body.failed?.length ? ` (failed: ${body.failed.join(", ")})` : ""}`
+          : "Refresh ran, but no seasons changed."
+      );
+      await loadStatus(selectedSlug);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function deleteOrReset() {
+    if (!selectedSlug || creating || !selected) return;
+    const builtIn = selected.builtIn;
+    const confirmed = window.confirm(
+      builtIn
+        ? `Reset ${selected.name} to its built-in defaults? Custom branding, hostnames, and refresh token will be cleared.`
+        : `Delete ${selected.name}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/admin/tenants/${selectedSlug}`, {
+        method: "DELETE",
+        headers: tokenHeaders(token)
+      });
+      const body = (await response.json().catch(() => null)) as DeleteTenantResult | { error?: string } | null;
+      if (!response.ok) throw new Error((body as { error?: string } | null)?.error ?? "Delete failed");
+      const result = body as DeleteTenantResult;
+      trackEvent("admin_tenant_delete", { tenant_slug: selectedSlug, reset: result.reset });
+
+      if (result.tenant) {
+        const updated = result.tenant;
+        setTenants((current) => current.map((item) => (item.slug === updated.slug ? updated : item)));
+        setDraft(toDraft(updated));
+        setNotice(result.reset ? "Reset to built-in defaults." : "No customizations to reset.");
+      } else {
+        const remaining = tenants.filter((item) => item.slug !== selectedSlug);
+        setTenants(remaining);
+        if (remaining[0]) {
+          setSelectedSlug(remaining[0].slug);
+          setDraft(toDraft(remaining[0]));
+        } else {
+          setSelectedSlug(null);
+          setDraft(emptyDraft);
+        }
+        setNotice("Tenant deleted.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -443,9 +645,21 @@ export function AdminDashboard() {
                 <p className="eyebrow">{creating ? "CREATE" : selected?.builtIn ? "BUILT-IN" : "CREATED"}</p>
                 <h1>{creating ? "New tenant" : draft.name || "Tenant"}</h1>
               </div>
-              <button type="submit" className="admin-save" disabled={saving}>
-                <Save size={16} /> {saving ? "Saving…" : "Save"}
-              </button>
+              <div className="admin-section-actions">
+                {!creating && selected ? (
+                  <button
+                    type="button"
+                    className="admin-danger"
+                    onClick={() => void deleteOrReset()}
+                    disabled={deleting}
+                  >
+                    <Trash2 size={16} /> {deleting ? "Working…" : selected.builtIn ? "Reset to defaults" : "Delete tenant"}
+                  </button>
+                ) : null}
+                <button type="submit" className="admin-save" disabled={saving}>
+                  <Save size={16} /> {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
             </div>
             {error ? <p className="admin-error">{error}</p> : null}
             {notice ? <p className="admin-notice">{notice}</p> : null}
@@ -472,6 +686,49 @@ export function AdminDashboard() {
                 </a>
               ) : null}
             </div>
+
+            {!creating && selected ? (
+              <div className="admin-status">
+                <div className="admin-status-head">
+                  <strong>Status</strong>
+                  <button
+                    type="button"
+                    className="admin-refresh"
+                    onClick={() => void forceRefresh()}
+                    disabled={refreshing}
+                  >
+                    <RefreshCw size={14} className={refreshing ? "spin" : undefined} />
+                    {refreshing ? "Refreshing…" : "Force refresh"}
+                  </button>
+                </div>
+                {statusLoading ? (
+                  <p className="captain-hint">Loading status…</p>
+                ) : status ? (
+                  <>
+                    <div className="admin-status-row">
+                      <span className={`admin-status-pill admin-status-${status.warm.status}`}>{status.warm.status}</span>
+                      <span>{status.cache.seasonsCached} season(s) cached</span>
+                      <span>{status.cache.profilesCached} profile(s) cached</span>
+                    </div>
+                    {status.cache.seasons.length ? (
+                      <ul className="admin-status-seasons">
+                        {[...status.cache.seasons]
+                          .sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt))
+                          .slice(0, 3)
+                          .map((season) => (
+                            <li key={season.year}>
+                              {season.year} · {season.playerCount} players · fetched {relativeTime(season.fetchedAt)}
+                            </li>
+                          ))}
+                      </ul>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="captain-hint">Status unavailable.</p>
+                )}
+                <p className="captain-hint">Uses the refresh token above if set, otherwise your sign-in token.</p>
+              </div>
+            ) : null}
 
             <div className="admin-fields">
               {creating ? (
@@ -511,9 +768,43 @@ export function AdminDashboard() {
                       }
                     >
                       <option value="sportspress">SportsPress (live ingest)</option>
+                      <option value="csv">CSV (spreadsheet ingest)</option>
                       <option value="fixture">Fixture (demo data)</option>
                     </select>
                   </label>
+                  {draft.adapter === "csv" ? (
+                    <>
+                      <label className="field-label admin-span">
+                        Players CSV URL
+                        <input
+                          value={draft.csvPlayersUrl}
+                          onChange={(event) => setDraft({ ...draft, csvPlayersUrl: event.target.value })}
+                          placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv"
+                          required
+                        />
+                      </label>
+                      <label className="field-label admin-span">
+                        Standings CSV URL (optional)
+                        <input
+                          value={draft.csvStandingsUrl}
+                          onChange={(event) => setDraft({ ...draft, csvStandingsUrl: event.target.value })}
+                          placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv"
+                        />
+                      </label>
+                      <label className="field-label admin-span">
+                        Schedule CSV URL (optional)
+                        <input
+                          value={draft.csvScheduleUrl}
+                          onChange={(event) => setDraft({ ...draft, csvScheduleUrl: event.target.value })}
+                          placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv"
+                        />
+                      </label>
+                      <p className="captain-hint admin-span">
+                        Each URL is a published spreadsheet export (Google Sheets: File → Share → Publish to web →
+                        CSV). One row per season — add a "season" column to hold multiple years in one sheet.
+                      </p>
+                    </>
+                  ) : null}
                   <label className="field-label">
                     Sport
                     <select value={draft.sport} onChange={(event) => setDraft({ ...draft, sport: event.target.value })}>
@@ -566,6 +857,16 @@ export function AdminDashboard() {
                   placeholder="river.localhost"
                 />
               </label>
+              {invalidHostnames.length ? (
+                <p className="admin-hostname-hint admin-span admin-error">
+                  Not a valid hostname: {invalidHostnames.join(", ")}
+                </p>
+              ) : null}
+              {draft.slug.trim() && !hasAfterwhistleAlias ? (
+                <button type="button" className="admin-hostname-suggest admin-span" onClick={addAfterwhistleAlias}>
+                  + Add {draft.slug.trim()}.afterwhistle.ca
+                </button>
+              ) : null}
               <label className="field-label">
                 Logo URL
                 <input value={draft.logo} onChange={(event) => setDraft({ ...draft, logo: event.target.value })} />
@@ -576,11 +877,33 @@ export function AdminDashboard() {
               </label>
               <label className="field-label">
                 Primary color
-                <input type="text" value={draft.primaryColor} onChange={(event) => setDraft({ ...draft, primaryColor: event.target.value })} />
+                <div className="admin-color-row">
+                  <input
+                    type="color"
+                    value={safeColorValue(draft.primaryColor)}
+                    onChange={(event) => setDraft({ ...draft, primaryColor: event.target.value })}
+                  />
+                  <input
+                    type="text"
+                    value={draft.primaryColor}
+                    onChange={(event) => setDraft({ ...draft, primaryColor: event.target.value })}
+                  />
+                </div>
               </label>
               <label className="field-label">
                 Secondary color
-                <input type="text" value={draft.secondaryColor} onChange={(event) => setDraft({ ...draft, secondaryColor: event.target.value })} />
+                <div className="admin-color-row">
+                  <input
+                    type="color"
+                    value={safeColorValue(draft.secondaryColor)}
+                    onChange={(event) => setDraft({ ...draft, secondaryColor: event.target.value })}
+                  />
+                  <input
+                    type="text"
+                    value={draft.secondaryColor}
+                    onChange={(event) => setDraft({ ...draft, secondaryColor: event.target.value })}
+                  />
+                </div>
               </label>
               <label className="field-label admin-span">
                 Document title
@@ -637,7 +960,7 @@ export function AdminDashboard() {
               )}
             </div>
             <p className="captain-hint">
-              Paste a league URL and click Detect source to auto-fill SportsPress settings, or pick fixture mode for a branded demo.
+              Paste a league URL and click Detect source to auto-fill SportsPress settings, or pick CSV / fixture mode for a spreadsheet-backed or branded demo tenant.
               This never writes back to a league’s own system.
               {selected?.builtIn ? " Built-in ingest URLs and adapter cannot be changed here." : ""}
             </p>
