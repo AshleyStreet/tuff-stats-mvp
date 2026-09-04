@@ -96,6 +96,8 @@ export type League = {
   source: LeagueSourceConfig;
   /** Present for created fixture tenants. Harbor uses the baked seed in the fixture adapter. */
   fixture?: FixtureSeed;
+  /** Club-plan tenants hide the "Stats by Afterwhistle" footer badge. */
+  whiteLabel?: boolean;
 };
 
 /** Client-safe subset. Source URLs and slug-discovery rules stay on the server. */
@@ -110,6 +112,7 @@ export type PublicLeague = {
   sportIcon: SportIcon;
   presentation: StatPresentation;
   franchiseTeamNames: string[];
+  whiteLabel?: boolean;
 };
 
 export function toPublicLeague(league: League): PublicLeague {
@@ -123,6 +126,7 @@ export function toPublicLeague(league: League): PublicLeague {
     copy: league.copy,
     sportIcon: league.sportIcon,
     presentation: league.presentation,
-    franchiseTeamNames: league.source.franchiseTeamNames
+    franchiseTeamNames: league.source.franchiseTeamNames,
+    whiteLabel: league.whiteLabel
   };
 }

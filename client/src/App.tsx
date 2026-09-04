@@ -826,16 +826,18 @@ export default function App() {
         )}
       </div>
 
-      <footer className="app-foot">
-        <a
-          href="https://afterwhistle.ca"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => trackEvent("powered_by_click", { league: league.slug })}
-        >
-          Stats by Afterwhistle
-        </a>
-      </footer>
+      {!league.whiteLabel && (
+        <footer className="app-foot">
+          <a
+            href="https://afterwhistle.ca"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackEvent("powered_by_click", { league: league.slug })}
+          >
+            Stats by Afterwhistle
+          </a>
+        </footer>
+      )}
     </div>
     <PrintSheet cards={printCards ?? []} />
     </>

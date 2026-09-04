@@ -90,6 +90,16 @@ function pricingMail(plan: string) {
   return `mailto:${DEMO_MAIL}?subject=${encodeURIComponent(`Afterwhistle ${plan} plan`)}`;
 }
 
+/** Stripe Payment Links, one price per link. Falls back to a demo-request email when unset. */
+const STRIPE_CHECKOUT_LINKS: Partial<Record<(typeof PRICING)[number]["id"], string>> = {
+  league: import.meta.env.VITE_STRIPE_LEAGUE_LINK?.trim() || undefined,
+  club: import.meta.env.VITE_STRIPE_CLUB_LINK?.trim() || undefined
+};
+
+function checkoutHref(plan: (typeof PRICING)[number]) {
+  return STRIPE_CHECKOUT_LINKS[plan.id] ?? pricingMail(plan.name);
+}
+
 function trackMarketingClick(target: string) {
   trackEvent("marketing_click", { target });
 }
@@ -381,7 +391,7 @@ export function MarketingHome() {
                 </ul>
                 <a
                   className={`aw-btn ${plan.featured ? "aw-btn-primary" : "aw-btn-ghost"} aw-price-cta`}
-                  href={pricingMail(plan.name)}
+                  href={checkoutHref(plan)}
                   onClick={() => trackMarketingClick(`pricing_${plan.id}`)}
                 >
                   {plan.cta}

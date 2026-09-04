@@ -25,6 +25,7 @@ type Draft = {
   recapLinkLabel: string;
   htmlSourceLabel: string;
   franchiseTeamNames: string;
+  whiteLabel: boolean;
 };
 
 const emptyDraft: Draft = {
@@ -46,7 +47,8 @@ const emptyDraft: Draft = {
   profileLinkLabel: "",
   recapLinkLabel: "",
   htmlSourceLabel: "",
-  franchiseTeamNames: ""
+  franchiseTeamNames: "",
+  whiteLabel: false
 };
 
 function tokenHeaders(token: string) {
@@ -78,7 +80,8 @@ function toDraft(tenant: AdminTenant): Draft {
     profileLinkLabel: tenant.copy.profileLinkLabel,
     recapLinkLabel: tenant.copy.recapLinkLabel,
     htmlSourceLabel: tenant.copy.htmlSourceLabel,
-    franchiseTeamNames: tenant.franchiseTeamNames.join(", ")
+    franchiseTeamNames: tenant.franchiseTeamNames.join(", "),
+    whiteLabel: tenant.whiteLabel
   };
 }
 
@@ -114,6 +117,7 @@ function payloadFromDraft(
     copy,
     adapter: draft.adapter,
     sport: draft.sport,
+    whiteLabel: draft.whiteLabel,
     ...(creating && draft.sourceUrl.trim() ? { sourceUrl: draft.sourceUrl.trim() } : {}),
     ...(creating && probe?.source ? { source: probe.source } : {}),
     ...(creating || draft.franchiseTeamNames.trim()
@@ -571,6 +575,14 @@ export function AdminDashboard() {
               <label className="field-label admin-span">
                 Tagline
                 <input value={draft.tagline} onChange={(event) => setDraft({ ...draft, tagline: event.target.value })} />
+              </label>
+              <label className="captain-check admin-span">
+                <input
+                  type="checkbox"
+                  checked={draft.whiteLabel}
+                  onChange={(event) => setDraft({ ...draft, whiteLabel: event.target.checked })}
+                />
+                White label (Club plan) — hides the "Stats by Afterwhistle" footer badge
               </label>
               {(creating || selected?.builtIn === false) && (
                 <label className="field-label admin-span">
