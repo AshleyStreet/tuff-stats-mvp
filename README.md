@@ -76,9 +76,18 @@ PORT=4000
 # Optional. Overrides TUFF's configured source URL (server/src/leagues/tuff.ts).
 TUFF_STATS_URL=https://www.playtuff.ca/list/2026-tuff-stats/
 ADMIN_TOKEN=
+# Optional. Per-tenant refresh token — see "Admin tokens" below.
+# ADMIN_TOKEN_TUFF=
 ```
 
-Set `ADMIN_TOKEN` on the server to enable force refresh. Only you should know that token — never put it in the client build.
+## Admin tokens
+
+There are two separate credentials:
+
+- **`ADMIN_TOKEN`** — the platform token. It gates tenant management: `/admin`, `POST`/`PUT /api/admin/tenants`, and `POST /api/admin/probe`. These are cross-tenant registry operations, so there's one platform token, not one per tenant.
+- **A per-tenant refresh token** — gates `POST /api/admin/refresh` and the `?refresh=1` bypass on `GET /api/seasons`/`/api/schedule`/`/api/players` for one specific tenant, so a leaked or shared refresh credential can't be used to force-refresh every tenant's data. Set it either as an `ADMIN_TOKEN_<SLUG>` env var (e.g. `ADMIN_TOKEN_TUFF`, highest precedence) or via the "Refresh token" field on that tenant in `/admin`.
+
+A tenant with no per-tenant token configured still accepts the platform `ADMIN_TOKEN` for its refresh — this is the default for every tenant until you set one, so existing deployments need no changes to keep working.
 
 ```bash
 curl -X POST https://<your-app>/api/admin/refresh \
@@ -91,7 +100,7 @@ Useful endpoints:
 
 - `GET /api/health` — lightweight liveness + warm summary
 - `GET /api/status` — cache/warm detail
-- `POST /api/admin/refresh` — force re-fetch (requires `ADMIN_TOKEN`)
+- `POST /api/admin/refresh` — force re-fetch (requires that tenant's admin token)
 
 Local production smoke test:
 
