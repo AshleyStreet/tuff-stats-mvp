@@ -25,7 +25,19 @@ A tenant is served by one of three data adapters (`server/src/adapters/`), picke
 - `sportspress` — a generic, config-driven adapter for any SportsPress-powered league site
 - `fixture` — static JSON data, used for demo tenants
 
-All three normalize their raw source fields into the same canonical `Player`/`Stats` shape (`server/src/domain/types.ts`) via a shared stat-abbreviation map that a tenant can extend or override per its own source fields (`LeagueSourceConfig.statMap`) — onboarding a league with different raw stat names is a config change, not a code change.
+All three normalize their raw source fields into the same canonical `Player`/`Stats` shape (`server/src/domain/types.ts`) via a shared stat-abbreviation map that a tenant can extend or override per its own source fields (`LeagueSourceConfig.statMap`) — onboarding a league with different raw stat names is a config change, not a code change:
+
+```json
+{
+  "source": {
+    "statMap": {
+      "marques": "goals"
+    }
+  }
+}
+```
+
+The `sourceUrl`/`source` block above is exactly what `POST /api/admin/tenants` already accepts when creating a `sportspress` tenant, so `statMap` needs no admin-dashboard changes to use.
 
 **Tenant resolution** is hostname-based: in production, the request's `Host` header is matched against each tenant's configured `hostnames[]` (e.g. `stats.playtuff.ca` → TUFF). In development only, a `?league=<slug>` query param or `LEAGUE_SLUG` env var can override this for local testing. An unrecognized host safely falls back to the default tenant rather than erroring.
 
