@@ -105,6 +105,13 @@ export type League = {
   fixture?: FixtureSeed;
   /** Club-plan tenants hide the "Stats by Afterwhistle" footer badge. */
   whiteLabel?: boolean;
+  /**
+   * Per-tenant secret gating POST /api/admin/refresh and the refresh=1
+   * bypasses for this tenant. When unset, the platform ADMIN_TOKEN is
+   * accepted instead (legacy fallback — see adminTokens.ts). Server-only,
+   * never sent to the client.
+   */
+  refreshToken?: string;
 };
 
 /** Client-safe subset. Source URLs and slug-discovery rules stay on the server. */

@@ -28,6 +28,7 @@ export type TenantRecord = {
   sportIcon?: SportIcon;
   source?: LeagueSourceConfig;
   whiteLabel?: boolean;
+  refreshToken?: string;
 };
 
 export class TenantStoreError extends Error {
@@ -130,6 +131,7 @@ export function applyTenantRecord(base: League, record: TenantRecord, builtIn: b
     next.copy = { ...next.copy, ...sanitizeCopy(record.copy) };
   }
   if (record.whiteLabel != null) next.whiteLabel = Boolean(record.whiteLabel);
+  if (record.refreshToken != null) next.refreshToken = String(record.refreshToken).trim() || undefined;
   if (!builtIn && record.franchiseTeamNames) {
     const teams = record.franchiseTeamNames.map((name) => String(name).trim()).filter(Boolean);
     next.source.franchiseTeamNames = teams;
@@ -219,7 +221,8 @@ export function mergeTenantRecord(slug: string, kind: TenantRecordKind, patch: O
     sport: patch.sport ?? existing?.sport,
     sportIcon: patch.sportIcon ?? existing?.sportIcon,
     source: patch.source ?? existing?.source,
-    whiteLabel: patch.whiteLabel ?? existing?.whiteLabel
+    whiteLabel: patch.whiteLabel ?? existing?.whiteLabel,
+    refreshToken: patch.refreshToken ?? existing?.refreshToken
   };
   writeTenantRecord(record);
   return record;
