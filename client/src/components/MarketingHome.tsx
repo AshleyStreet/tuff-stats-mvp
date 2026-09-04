@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { MarketingDemo } from "./MarketingDemo";
 import { TradingCard } from "./TradingCard";
 import "./marketing.css";
 import { LeaguePreviewProvider } from "../league/LeagueProvider";
@@ -222,14 +223,15 @@ export function MarketingHome() {
           </figure>
         </section>
 
-        <section className="aw-section aw-product aw-split aw-split--flip" id="product" aria-labelledby="aw-product-title">
-          <div className="aw-split-copy aw-product-copy">
+        <section className="aw-section aw-product" id="product" aria-labelledby="aw-product-title">
+          <div className="aw-product-head">
             <h2 id="aw-product-title" className="aw-section-title">
               Same numbers. Better board.
             </h2>
             <p className="aw-section-lede">
               We take the standings and player stats you already post and put them on a fast board
-              that looks like your club — like{" "}
+              that looks like your club. This one is live — search it, sort it, open a player. It
+              is the same board running at{" "}
               <a
                 href={LIVE_LEAGUE_URL}
                 onClick={() => trackMarketingClick("live_demo")}
@@ -238,16 +240,11 @@ export function MarketingHome() {
               </a>.
             </p>
           </div>
-          <figure className="aw-shot aw-shot-board">
-            <img
-              src="/marketing/aw-product-board.png"
-              alt="League board with players, standings, and leaders"
-              width={1600}
-              height={900}
-              loading="lazy"
-            />
-            <figcaption>Standings, leaders, and roster cards in one place</figcaption>
-          </figure>
+          <MarketingDemo />
+          <p className="aw-demo-caption">
+            Harbor Flag Football is a sample league. Your board shows your teams, your players, and
+            your colors.
+          </p>
         </section>
 
         <section className="aw-section aw-cards-media aw-split aw-split--flip" aria-labelledby="aw-cards-title">
