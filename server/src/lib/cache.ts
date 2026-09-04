@@ -56,26 +56,11 @@ export function ensureCacheDir(leagueId?: string) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-export function readCacheFile<T>(name: string): CacheEnvelope<T> | null {
-  try {
-    const file = path.join(CACHE_DIR, cacheFileName(name));
-    if (!fs.existsSync(file)) return null;
-    return JSON.parse(fs.readFileSync(file, "utf8")) as CacheEnvelope<T>;
-  } catch {
-    return null;
-  }
-}
-
-export function writeCacheFile<T>(name: string, fingerprint: string, payload: T) {
-  ensureCacheDir();
-  const envelope: CacheEnvelope<T> = {
-    fingerprint,
-    savedAt: new Date().toISOString(),
-    payload
-  };
-  fs.writeFileSync(path.join(CACHE_DIR, cacheFileName(name)), JSON.stringify(envelope));
-}
-
+/**
+ * All adapters must go through these tenant-scoped cache functions —
+ * do not add a non-scoped cache read/write, or one tenant's data could
+ * leak into another's cache.
+ */
 export function readLeagueCache<T>(leagueId: string, name: string): CacheEnvelope<T> | null {
   for (const rel of cacheReadCandidates(leagueId, name)) {
     try {
