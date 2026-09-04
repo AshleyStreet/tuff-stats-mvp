@@ -712,7 +712,7 @@ export default function App() {
               {(data || schedule) && (
                 <span className="source-badge">
                   {tab === "schedule"
-                    ? `${formatUpdatedAt(schedule?.meta.fetchedAt, now) ? `Updated ${formatUpdatedAt(schedule?.meta.fetchedAt, now)}` : "Live"} · SportsPress`
+                    ? `${formatUpdatedAt(schedule?.meta.fetchedAt, now) ? `Updated ${formatUpdatedAt(schedule?.meta.fetchedAt, now)}` : "Live"} · ${sourceLabel}`
                     : `${updatedLabel ? `Updated ${updatedLabel}` : "Live"} · ${sourceLabel}`}
                 </span>
               )}

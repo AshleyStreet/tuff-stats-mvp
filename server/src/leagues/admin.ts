@@ -7,9 +7,11 @@ import {
   listLeagues,
   reloadTenants
 } from "./registry.js";
+import { FEATURE_KEYS } from "./features.js";
 import { probeSourceUrl, type SourceProbeResult } from "./probe.js";
 import { normalizeSport, sportMeta } from "./sport.js";
 import {
+  deleteTenantRecord,
   isValidSlug,
   mergeTenantRecord,
   parseHexColor,
@@ -43,6 +45,7 @@ export type AdminTenant = {
   franchiseTeamNames: string[];
   sourceOrigin?: string;
   whiteLabel: boolean;
+  features: string[];
   /** Never echoes the raw token back — just whether one is configured. */
   hasRefreshToken: boolean;
 };
@@ -61,6 +64,7 @@ export type TenantWriteInput = {
   sourceUrl?: string;
   source?: LeagueSourceConfig;
   whiteLabel?: boolean;
+  features?: unknown;
   /** Set to a new token, or "" to clear it and fall back to the platform ADMIN_TOKEN. */
   refreshToken?: string;
 };
@@ -79,8 +83,14 @@ function toAdminTenant(league: League): AdminTenant {
     adapter: league.adapter,
     builtIn: isBuiltInLeague(league.slug),
     franchiseTeamNames: [...league.source.franchiseTeamNames],
-    sourceOrigin: league.adapter === "sportspress" ? league.source.origin : undefined,
+    sourceOrigin:
+      league.adapter === "sportspress"
+        ? league.source.origin
+        : league.adapter === "csv"
+          ? league.source.csv?.playersUrl
+          : undefined,
     whiteLabel: Boolean(league.whiteLabel),
+    features: [...(league.features ?? [])],
     hasRefreshToken: Boolean(league.refreshToken?.trim())
   };
 }
@@ -99,6 +109,14 @@ function teamNames(raw: unknown) {
   if (raw == null) return undefined;
   const list = Array.isArray(raw) ? raw : String(raw).split(/[\n,]/);
   return list.map((item) => String(item).trim()).filter(Boolean);
+}
+
+/** Silently drops unknown keys so a stale client build can't wedge a typo into storage. */
+function featureList(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  const list = Array.isArray(raw) ? raw : String(raw).split(/[\n,]/);
+  const known = new Set<string>(FEATURE_KEYS);
+  return [...new Set(list.map((item) => String(item).trim()).filter((item) => known.has(item)))];
 }
 
 function brandingPatch(raw?: Partial<LeagueBranding>) {
@@ -120,9 +138,12 @@ function assertUniqueHostnames(hostnames: string[], slug: string) {
   }
 }
 
-function resolveCreateAdapter(input: TenantWriteInput, probed?: SourceProbeResult) {
+function resolveCreateAdapter(
+  input: TenantWriteInput,
+  probed?: SourceProbeResult
+): "fixture" | "sportspress" | "csv" {
   const requested = input.adapter?.trim().toLowerCase();
-  if (requested === "fixture" || requested === "sportspress") return requested;
+  if (requested === "fixture" || requested === "sportspress" || requested === "csv") return requested;
   if (probed?.adapter) return probed.adapter;
   if (input.source) return "sportspress";
   return "fixture";
@@ -144,7 +165,13 @@ async function resolveCreatePayload(input: TenantWriteInput) {
             "SportsPress source config is required. Probe the URL first or provide source settings."
           );
         })()
-      : undefined;
+      : adapter === "csv"
+        ? input.source?.csv?.playersUrl
+          ? input.source
+          : (() => {
+              throw new AdminError(400, "A CSV source with at least a players URL is required.");
+            })()
+        : undefined;
 
   return { adapter, sport, sportIcon, source, probed };
 }
@@ -191,6 +218,7 @@ export async function createAdminTenant(input: TenantWriteInput): Promise<AdminT
       sportIcon,
       source,
       whiteLabel: input.whiteLabel,
+      features: featureList(input.features),
       refreshToken: input.refreshToken,
       fixture:
         adapter === "fixture"
@@ -237,6 +265,7 @@ export function updateAdminTenant(slugInput: string, input: TenantWriteInput): A
       sport,
       sportIcon,
       whiteLabel: input.whiteLabel,
+      features: featureList(input.features),
       refreshToken: input.refreshToken
     });
   } catch (error) {
@@ -247,6 +276,30 @@ export function updateAdminTenant(slugInput: string, input: TenantWriteInput): A
   const updated = getLeagueBySlug(slug);
   if (!updated) throw new AdminError(500, "Tenant was saved but could not be loaded");
   return toAdminTenant(updated);
+}
+
+export type DeleteResult = { deleted: boolean; reset: boolean; tenant?: AdminTenant };
+
+/**
+ * Non-built-in tenants are removed entirely. Built-in tenants can't be
+ * removed (they're defined in code) — deleting one just clears its
+ * overlay, resetting it back to its code-defined defaults. Idempotent:
+ * calling this with nothing to remove is a no-op, not an error.
+ */
+export function deleteAdminTenant(slugInput: string): DeleteResult {
+  const slug = slugInput.trim().toLowerCase();
+  if (isBuiltInLeague(slug)) {
+    const reset = deleteTenantRecord(slug);
+    reloadTenants();
+    const tenant = getLeagueBySlug(slug);
+    if (!tenant) throw new AdminError(500, "Tenant could not be reloaded after reset");
+    return { deleted: false, reset, tenant: toAdminTenant(tenant) };
+  }
+
+  if (!getLeagueBySlug(slug)) throw new AdminError(404, "Tenant not found");
+  const deleted = deleteTenantRecord(slug);
+  reloadTenants();
+  return { deleted, reset: false };
 }
 
 function wrapStoreError(error: unknown): never {

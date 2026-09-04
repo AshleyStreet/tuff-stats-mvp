@@ -23,11 +23,12 @@ export type TenantRecord = {
   publicSeason?: string;
   franchiseTeamNames?: string[];
   fixture?: FixtureSeed;
-  adapter?: "fixture" | "sportspress";
+  adapter?: "fixture" | "sportspress" | "csv";
   sport?: string;
   sportIcon?: SportIcon;
   source?: LeagueSourceConfig;
   whiteLabel?: boolean;
+  features?: string[];
   refreshToken?: string;
 };
 
@@ -88,6 +89,7 @@ export function cloneSourceConfig(source: LeagueSourceConfig): LeagueSourceConfi
     },
     modernTeamSlugs: [...source.modernTeamSlugs],
     franchiseTeamNames: [...source.franchiseTeamNames],
+    csv: source.csv ? { ...source.csv } : undefined,
     sportspress: source.sportspress
       ? {
           ...source.sportspress,
@@ -107,7 +109,8 @@ export function cloneLeague(league: League): League {
     branding: { ...league.branding },
     copy: { ...league.copy },
     source: cloneSourceConfig(league.source),
-    fixture: league.fixture ? structuredClone(league.fixture) : undefined
+    fixture: league.fixture ? structuredClone(league.fixture) : undefined,
+    features: league.features ? [...league.features] : undefined
   };
 }
 
@@ -131,6 +134,7 @@ export function applyTenantRecord(base: League, record: TenantRecord, builtIn: b
     next.copy = { ...next.copy, ...sanitizeCopy(record.copy) };
   }
   if (record.whiteLabel != null) next.whiteLabel = Boolean(record.whiteLabel);
+  if (record.features != null) next.features = [...record.features];
   if (record.refreshToken != null) next.refreshToken = String(record.refreshToken).trim() || undefined;
   if (!builtIn && record.franchiseTeamNames) {
     const teams = record.franchiseTeamNames.map((name) => String(name).trim()).filter(Boolean);
@@ -204,6 +208,21 @@ export function writeTenantRecord(record: TenantRecord) {
   fs.renameSync(tmp, file);
 }
 
+/**
+ * Removes a tenant's record file, if any. For a "created" tenant this
+ * deletes it entirely; for a "overlay" (built-in) tenant this resets it
+ * back to its code-defined defaults. Leaves .cache/<slug>/ untouched —
+ * a recreated tenant of the same slug gets a warm start, and a reset
+ * tenant's cache is still valid data for its (now default) source config.
+ */
+export function deleteTenantRecord(slug: string): boolean {
+  if (!isValidSlug(slug)) return false;
+  const file = path.join(tenantsDir(), `${slug}.json`);
+  if (!fs.existsSync(file)) return false;
+  fs.rmSync(file);
+  return true;
+}
+
 export function mergeTenantRecord(slug: string, kind: TenantRecordKind, patch: Omit<TenantRecord, "kind" | "slug">) {
   const existing = readTenantRecord(slug);
   const record: TenantRecord = {
@@ -222,6 +241,7 @@ export function mergeTenantRecord(slug: string, kind: TenantRecordKind, patch: O
     sportIcon: patch.sportIcon ?? existing?.sportIcon,
     source: patch.source ?? existing?.source,
     whiteLabel: patch.whiteLabel ?? existing?.whiteLabel,
+    features: patch.features ?? existing?.features,
     refreshToken: patch.refreshToken ?? existing?.refreshToken
   };
   writeTenantRecord(record);

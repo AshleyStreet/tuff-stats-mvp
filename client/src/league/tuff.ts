@@ -38,5 +38,6 @@ export const tuffPublicLeague: PublicLeague = {
     "Wildcats",
     "Wolfhounds",
     "Yetis"
-  ]
+  ],
+  features: []
 };
