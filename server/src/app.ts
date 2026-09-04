@@ -6,9 +6,16 @@ import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { getAdapter } from "./adapters/resolve.js";
 import { toLeagueRef, type StatKey } from "./domain/types.js";
-import { AdminError, createAdminTenant, listAdminTenants, probeAdminSourceUrl, updateAdminTenant } from "./leagues/admin.js";
+import {
+  AdminError,
+  createAdminTenant,
+  deleteAdminTenant,
+  listAdminTenants,
+  probeAdminSourceUrl,
+  updateAdminTenant
+} from "./leagues/admin.js";
 import { refreshTokenFor } from "./leagues/adminTokens.js";
-import { getLeagueByHostname, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
+import { getLeagueByHostname, getLeagueBySlug, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
@@ -157,6 +164,43 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
       return res.json({ tenant: tenantRecord });
     } catch (error) {
       return sendAdminError(res, error);
+    }
+  });
+
+  app.delete("/api/admin/tenants/:slug", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const result = deleteAdminTenant(String(req.params.slug));
+      return res.json(result);
+    } catch (error) {
+      return sendAdminError(res, error);
+    }
+  });
+
+  // Slug-scoped, unlike /api/status and /api/admin/refresh below — those resolve by
+  // Host (dev-only ?league= override), so the admin dashboard needs a way to target
+  // an arbitrary tenant regardless of which host is serving /admin.
+  app.get("/api/admin/tenants/:slug/status", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const league = getLeagueBySlug(String(req.params.slug));
+    if (!league) return res.status(404).json({ error: "Tenant not found" });
+    return res.json(getAdapter(league).status());
+  });
+
+  app.post("/api/admin/tenants/:slug/refresh", async (req, res) => {
+    const league = getLeagueBySlug(String(req.params.slug));
+    if (!league) return res.status(404).json({ error: "Tenant not found" });
+    if (!isRefreshAuthorized(req, league)) {
+      return res.status(401).json({ error: "Unauthorized — this tenant requires its own refresh token" });
+    }
+    try {
+      const season = String(req.body?.season ?? req.query.season ?? "").trim();
+      const adapter = getAdapter(league);
+      const result = await adapter.refresh(season || undefined);
+      return res.json({ ok: true, ...result, status: adapter.status() });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return res.status(502).json({ error: "Unable to refresh source data", detail: message });
     }
   });
 

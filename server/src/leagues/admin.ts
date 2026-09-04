@@ -10,6 +10,7 @@ import {
 import { probeSourceUrl, type SourceProbeResult } from "./probe.js";
 import { normalizeSport, sportMeta } from "./sport.js";
 import {
+  deleteTenantRecord,
   isValidSlug,
   mergeTenantRecord,
   parseHexColor,
@@ -247,6 +248,30 @@ export function updateAdminTenant(slugInput: string, input: TenantWriteInput): A
   const updated = getLeagueBySlug(slug);
   if (!updated) throw new AdminError(500, "Tenant was saved but could not be loaded");
   return toAdminTenant(updated);
+}
+
+export type DeleteResult = { deleted: boolean; reset: boolean; tenant?: AdminTenant };
+
+/**
+ * Non-built-in tenants are removed entirely. Built-in tenants can't be
+ * removed (they're defined in code) — deleting one just clears its
+ * overlay, resetting it back to its code-defined defaults. Idempotent:
+ * calling this with nothing to remove is a no-op, not an error.
+ */
+export function deleteAdminTenant(slugInput: string): DeleteResult {
+  const slug = slugInput.trim().toLowerCase();
+  if (isBuiltInLeague(slug)) {
+    const reset = deleteTenantRecord(slug);
+    reloadTenants();
+    const tenant = getLeagueBySlug(slug);
+    if (!tenant) throw new AdminError(500, "Tenant could not be reloaded after reset");
+    return { deleted: false, reset, tenant: toAdminTenant(tenant) };
+  }
+
+  if (!getLeagueBySlug(slug)) throw new AdminError(404, "Tenant not found");
+  const deleted = deleteTenantRecord(slug);
+  reloadTenants();
+  return { deleted, reset: false };
 }
 
 function wrapStoreError(error: unknown): never {

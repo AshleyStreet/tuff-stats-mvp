@@ -204,6 +204,21 @@ export function writeTenantRecord(record: TenantRecord) {
   fs.renameSync(tmp, file);
 }
 
+/**
+ * Removes a tenant's record file, if any. For a "created" tenant this
+ * deletes it entirely; for a "overlay" (built-in) tenant this resets it
+ * back to its code-defined defaults. Leaves .cache/<slug>/ untouched —
+ * a recreated tenant of the same slug gets a warm start, and a reset
+ * tenant's cache is still valid data for its (now default) source config.
+ */
+export function deleteTenantRecord(slug: string): boolean {
+  if (!isValidSlug(slug)) return false;
+  const file = path.join(tenantsDir(), `${slug}.json`);
+  if (!fs.existsSync(file)) return false;
+  fs.rmSync(file);
+  return true;
+}
+
 export function mergeTenantRecord(slug: string, kind: TenantRecordKind, patch: Omit<TenantRecord, "kind" | "slug">) {
   const existing = readTenantRecord(slug);
   const record: TenantRecord = {
