@@ -16,6 +16,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # The LIGHTSAIL_* secrets live on this environment, not at repo level —
+    # without this the job sees them as empty and drone-ssh fails with
+    # "missing server host".
+    environment: "main - tuff-stats"
     steps:
       - name: Pull and restart on the instance
         uses: appleboy/ssh-action@v1.2.2
