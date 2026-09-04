@@ -1254,3 +1254,234 @@ html.marketing body::before {
   font-size: 0.95rem;
   max-width: 60ch;
 }
+
+/* ============================================================
+   Ingest rig, source lanes, billing toggle and the lead form.
+   Uses the existing --aw-* tokens and the two Barlow faces the
+   app already loads — no extra font requests on the landing page.
+   ============================================================ */
+
+html.marketing {
+  --aw-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* --- hero: three sources resolving into one board row --- */
+.aw-rig {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  margin-top: 42px;
+  max-width: 780px;
+}
+
+.aw-sources { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.aw-src {
+  background: rgba(10, 18, 14, 0.72);
+  border: 1px solid var(--aw-line);
+  border-left: 2px solid var(--aw-muted);
+  border-radius: 3px;
+  padding: 9px 12px;
+  font-family: var(--aw-mono);
+  font-size: 11px;
+  color: var(--aw-muted);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.aw-src b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--aw-bone);
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.aw-src--sheet { border-left-color: #58c07a; }
+.aw-src--sp { border-left-color: #6aa9ff; }
+.aw-src--esd { border-left-color: #ff8b5e; }
+
+.aw-rig-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--aw-signal);
+  font-family: var(--aw-mono);
+  font-size: 18px;
+}
+
+.aw-board-out {
+  min-width: 0;
+  background: rgba(18, 28, 22, 0.9);
+  border: 1px solid var(--aw-line);
+  border-radius: 4px;
+  padding: 14px 16px;
+  box-shadow: 0 0 0 1px rgba(214, 255, 75, 0.12), 0 20px 44px -30px rgba(0, 0, 0, 0.95);
+}
+
+.aw-board-who { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+
+.aw-board-name {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.aw-board-team {
+  font-family: var(--aw-mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+
+.aw-statline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 12px; }
+
+.aw-stat { background: rgba(10, 18, 14, 0.85); border-radius: 3px; padding: 7px 4px; text-align: center; }
+.aw-stat-k { display: block; font-family: var(--aw-mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--aw-muted); }
+.aw-stat-v { display: block; font-family: "Barlow Condensed", Barlow, sans-serif; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.aw-stat--hot .aw-stat-v { color: var(--aw-signal); }
+
+@media (max-width: 860px) {
+  .aw-rig { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .aw-rig-arrow { transform: rotate(90deg); }
+}
+
+/* --- proof strip --- */
+.aw-proof-list li { display: flex; flex-direction: column; gap: 2px; }
+.aw-proof-list li strong {
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--aw-bone);
+}
+.aw-proof-list li span { font-family: var(--aw-mono); font-size: 11px; color: var(--aw-muted); font-variant-numeric: tabular-nums; }
+
+/* --- source lanes --- */
+.aw-lanes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+  gap: 1px;
+  margin-top: 38px;
+  background: var(--aw-line);
+  border: 1px solid var(--aw-line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.aw-lane { background: var(--aw-ink); padding: 22px 20px; display: flex; flex-direction: column; gap: 8px; }
+.aw-lane-tag { font-family: var(--aw-mono); font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--aw-signal-deep); }
+.aw-lane h3 { margin: 0; font-family: "Barlow Condensed", Barlow, sans-serif; font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.aw-lane p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--aw-muted); }
+
+/* --- billing toggle --- */
+.aw-billing {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 22px;
+  padding: 3px;
+  border: 1px solid var(--aw-line);
+  border-radius: 4px;
+  background: rgba(18, 28, 22, 0.7);
+}
+
+.aw-billing button {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--aw-muted);
+  font-family: var(--aw-mono);
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.aw-billing button[aria-pressed="true"] { background: var(--aw-signal); color: var(--aw-ink); font-weight: 600; }
+.aw-billing button[aria-pressed="false"]:hover { color: var(--aw-bone); }
+.aw-billing-note { margin-top: 10px; font-family: var(--aw-mono); font-size: 11px; color: var(--aw-muted); max-width: 62ch; }
+
+/* --- lead form --- */
+.aw-start-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: start; }
+@media (max-width: 900px) { .aw-start-grid { grid-template-columns: minmax(0, 1fr); gap: 30px; } }
+
+.aw-assure { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--aw-muted); }
+.aw-assure li { position: relative; padding-left: 18px; }
+.aw-assure li::before { content: "▸"; position: absolute; left: 0; color: var(--aw-signal); }
+
+.aw-start {
+  background: rgba(18, 28, 22, 0.85);
+  border: 1px solid var(--aw-line);
+  border-radius: 5px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.aw-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.aw-field > span {
+  font-family: var(--aw-mono);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--aw-muted);
+}
+.aw-field > span em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--aw-muted); opacity: 0.85; }
+
+.aw-field input,
+.aw-field select,
+.aw-field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--aw-line);
+  border-radius: 3px;
+  background: rgba(10, 18, 14, 0.9);
+  color: var(--aw-bone);
+  font-family: Barlow, sans-serif;
+  font-size: 15px;
+}
+
+.aw-field input:focus,
+.aw-field select:focus,
+.aw-field textarea:focus { border-color: var(--aw-signal); outline: none; }
+.aw-field input::placeholder, .aw-field textarea::placeholder { color: #5f6f65; }
+
+.aw-field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 540px) { .aw-field-row { grid-template-columns: minmax(0, 1fr); } }
+
+.aw-start button[type="submit"] { border: 0; cursor: pointer; }
+.aw-start button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+.aw-form-foot { font-family: var(--aw-mono); font-size: 10px; color: var(--aw-muted); }
+.aw-form-error { font-size: 13px; color: #ff8b90; }
+
+/* Honeypot — off-screen rather than display:none, which some bots skip. */
+.aw-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+.aw-start-done {
+  background: rgba(18, 28, 22, 0.85);
+  border: 1px solid rgba(214, 255, 75, 0.35);
+  border-radius: 5px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.aw-start-done h3 {
+  margin: 0;
+  font-family: "Barlow Condensed", Barlow, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--aw-signal);
+}
+.aw-start-done p { margin: 0; color: var(--aw-muted); font-size: 15px; line-height: 1.6; }

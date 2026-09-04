@@ -21,9 +21,13 @@ services:
       TRUST_PROXY: "1"
       CACHE_DIR: /app/server/.cache
       TENANTS_DIR: /app/server/.tenants
+      LEADS_DIR: /app/server/.leads
     volumes:
       - tuff-cache:/app/server/.cache
       - tuff-tenants:/app/server/.tenants
+      # Inbound leads are the only data here we cannot regenerate — caches
+      # re-warm and tenants are re-creatable, but a lost lead is a lost league.
+      - tuff-leads:/app/server/.leads
     healthcheck:
       test:
         [
@@ -57,5 +61,6 @@ services:
 volumes:
   tuff-cache:
   tuff-tenants:
+  tuff-leads:
   caddy-data:
   caddy-config:

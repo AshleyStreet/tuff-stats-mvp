@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { MarketingDemo } from "./MarketingDemo";
 import { TradingCard } from "./TradingCard";
 import "./marketing.css";
@@ -8,105 +8,127 @@ import { trackEvent, trackPageView } from "../lib/analytics";
 import { setPageSeo } from "../lib/seo";
 import { marketingSampleCard } from "../lib/marketingSampleCard";
 
-const DEMO_MAIL = "hello@afterwhistle.ca";
-const DEMO_HREF = `mailto:${DEMO_MAIL}?subject=Afterwhistle%20demo`;
 const LIVE_LEAGUE_URL = "https://tuff.afterwhistle.ca";
+const START_HREF = "#start";
+
+/** Real leagues already on Afterwhistle — proof beats adjectives. */
+const LIVE_LEAGUES = [
+  { name: "TUFF", detail: "172 players · 7 seasons · flag football" },
+  { name: "Passion Soccer", detail: "106 players · 9 divisions" },
+  { name: "Bush League", detail: "47 games · softball" }
+] as const;
+
+/**
+ * The pitch: your stats already exist somewhere, and we read them from there.
+ * Each lane is a source we actually ingest today.
+ */
+const SOURCES = [
+  {
+    tag: "Spreadsheet",
+    name: "Google Sheets",
+    copy: "Publish the sheet you already keep. Add a season column and one file covers every year you've played."
+  },
+  {
+    tag: "WordPress",
+    name: "SportsPress",
+    copy: "Standings, schedules and player lists straight from the plugin. Divisions and multi-season sites included."
+  },
+  {
+    tag: "Legacy platform",
+    name: "eSportsDesk",
+    copy: "No API, no export, no problem. We read the pages your league has been posting for years."
+  },
+  {
+    tag: "Anything else",
+    name: "Your stats table",
+    copy: "A stats page we can open is enough to start. Send us the link and we'll tell you what we can read."
+  }
+] as const;
 
 const FAQS = [
   {
     q: "Do we have to replace our website?",
-    a: "No. Keep your site for registration, news, and everything else. Afterwhistle is just the stats board people open after the whistle."
+    a: "No. Keep it for registration, news and everything else. Afterwhistle is only the board people open after the whistle."
   },
   {
-    q: "What sports do you cover?",
-    a: "Flag football, softball, and soccer right now — with the stats each sport actually cares about. More sports when leagues need them."
+    q: "Our stats live in a spreadsheet. Is that a problem?",
+    a: "It's the easiest case we handle. Publish the sheet, send us the link, and we read it directly — no re-typing, and no new admin work for whoever keeps it."
   },
   {
-    q: "Can our league look like our club?",
-    a: "Yes. Your colors, your name, your link. Fans never see another league’s branding on Club plans."
+    q: "What if our league software has no export?",
+    a: "Still fine. We read published pages directly, including older platforms that never had an API. If we can open it, we can usually read it."
   },
   {
-    q: "How much does it cost?",
-    a: "League boards start at $39/month on your Afterwhistle subdomain. Club plans with a custom domain and white-label branding are $99/month. We also offer a free Pilot while you try it out. One-time setup applies for new leagues — book a demo for a quote."
+    q: "Is there a free plan?",
+    a: "No — but seeing your league on a real board is free. We build it from your existing stats and show you, and you decide from there. Every plan after that has a price, because every board comes with a person who set it up."
   },
   {
-    q: "How long until we’re live?",
-    a: "If you already post standings and stats online, we can usually get a branded board up quickly. If not, we start with a demo and switch on live data when you’re ready."
+    q: "What happens in the off-season?",
+    a: "On season billing, nothing. You pay once per season and the board stays up in between, so last season's standings and player cards keep working."
   },
   {
-    q: "Will this mess with our current site?",
-    a: "No. We only read what you already publish. We don’t edit or overwrite anything on your site."
+    q: "Which sports do you cover?",
+    a: "Flag and touch football, softball and soccer today — each with the columns that sport actually cares about. New sports get added when a league needs one."
+  },
+  {
+    q: "Will this change anything on our current site?",
+    a: "No. We only read what you already publish. Nothing is edited, overwritten or moved."
   }
 ] as const;
 
+type Billing = "season" | "month";
+
 const PRICING = [
-  {
-    id: "pilot",
-    name: "Pilot",
-    price: "Free",
-    period: "to try it",
-    blurb: "See your league on a board before you commit.",
-    features: [
-      "yourleague.afterwhistle.ca",
-      "Standings, schedule & player cards",
-      "Shareable links for players & games",
-      "Afterwhistle footer badge"
-    ],
-    cta: "Start a pilot",
-    featured: false
-  },
   {
     id: "league",
     name: "League",
-    price: "$39",
-    period: "/ month",
+    season: "$189",
+    month: "$39",
     blurb: "A branded board fans will actually bookmark.",
     features: [
-      "Custom colors & club logo",
+      "yourleague.afterwhistle.ca",
+      "Your colours and club logo",
       "Full stats board + trading cards",
-      "SEO & social link previews",
+      "SEO and social link previews",
       "Email support"
     ],
-    cta: "Get League",
     featured: true
   },
   {
     id: "club",
     name: "Club",
-    price: "$99",
-    period: "/ month",
-    blurb: "For multi-league clubs that want their own domain.",
+    season: "$479",
+    month: "$99",
+    blurb: "For clubs running more than one league, on their own domain.",
     features: [
+      "Everything in League",
       "Custom domain (stats.yourclub.ca)",
       "White-label — no Afterwhistle badge",
       "Captain tools & bulk card print",
-      "Priority onboarding & support"
+      "Priority onboarding"
     ],
-    cta: "Get Club",
     featured: false
   }
 ] as const;
 
-function pricingMail(plan: string) {
-  return `mailto:${DEMO_MAIL}?subject=${encodeURIComponent(`Afterwhistle ${plan} plan`)}`;
-}
-
-/** Stripe Payment Links, one price per link. Falls back to a demo-request email when unset. */
-const STRIPE_CHECKOUT_LINKS: Partial<Record<(typeof PRICING)[number]["id"], string>> = {
-  league: import.meta.env.VITE_STRIPE_LEAGUE_LINK?.trim() || undefined,
-  club: import.meta.env.VITE_STRIPE_CLUB_LINK?.trim() || undefined
-};
-
-function checkoutHref(plan: (typeof PRICING)[number]) {
-  return STRIPE_CHECKOUT_LINKS[plan.id] ?? pricingMail(plan.name);
-}
+/**
+ * Every plan CTA goes to the form, not to checkout. The page's argument is that
+ * we build your board on your own data first and setup is quoted up front —
+ * self-serve checkout with no onboarding contradicts that, and would take money
+ * before we know whether we can read the league's stats at all.
+ */
 
 function trackMarketingClick(target: string) {
   trackEvent("marketing_click", { target });
 }
 
+type FormState = "idle" | "sending" | "sent" | "error";
+
 export function MarketingHome() {
   const sampleCard = marketingSampleCard();
+  const [billing, setBilling] = useState<Billing>("season");
+  const [formState, setFormState] = useState<FormState>("idle");
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     const title = "Afterwhistle · League stats boards";
@@ -114,7 +136,7 @@ export function MarketingHome() {
     setPageSeo({
       title,
       description:
-        "Standings, schedules, and player cards for rec leagues — under your club's name and colors, without replacing your existing website.",
+        "Your league's stats already exist — in a spreadsheet, a plugin, or an old league page. We read them from wherever they live and turn them into a fast, branded board.",
       siteName: "Afterwhistle"
     });
     trackPageView("/", title);
@@ -123,6 +145,37 @@ export function MarketingHome() {
     };
   }, []);
 
+  async function submitLead(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    setFormState("sending");
+    setFormError(null);
+
+    try {
+      const response = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          league: data.get("league"),
+          sport: data.get("sport"),
+          statsUrl: data.get("statsUrl"),
+          email: data.get("email"),
+          notes: data.get("notes"),
+          website: data.get("website")
+        })
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? "That didn't send. Try again in a moment.");
+      trackEvent("lead_submit", { sport: String(data.get("sport") ?? "") });
+      setFormState("sent");
+      form.reset();
+    } catch (error) {
+      setFormState("error");
+      setFormError(error instanceof Error ? error.message : "That didn't send.");
+    }
+  }
+
   return (
     <div className="aw-shell">
       <header className="aw-top">
@@ -130,13 +183,12 @@ export function MarketingHome() {
           Afterwhistle
         </span>
         <nav className="aw-nav" aria-label="Primary">
-          <a href="#how" onClick={() => trackMarketingClick("nav_how")}>How it works</a>
+          <a href="#sources" onClick={() => trackMarketingClick("nav_sources")}>Your data</a>
           <a href="#product" onClick={() => trackMarketingClick("nav_product")}>The board</a>
+          <a href="#how" onClick={() => trackMarketingClick("nav_how")}>How it works</a>
           <a href="#pricing" onClick={() => trackMarketingClick("nav_pricing")}>Pricing</a>
-          <a href="#faq" onClick={() => trackMarketingClick("nav_faq")}>FAQ</a>
-          <a className="aw-nav-cta" href={DEMO_HREF}
-            onClick={() => trackMarketingClick("book_demo")}>
-            Book a demo
+          <a className="aw-nav-cta" href={START_HREF} onClick={() => trackMarketingClick("nav_start")}>
+            Send your link
           </a>
         </nav>
       </header>
@@ -157,70 +209,90 @@ export function MarketingHome() {
           <div className="aw-hero-copy">
             <p className="aw-brand aw-rise">Afterwhistle</p>
             <h1 className="aw-headline aw-rise aw-rise-2">
-              The stats board your league deserves.
-              <span className="aw-headline-break"> Keep the website you already have.</span>
+              Your stats already exist.
+              <span className="aw-headline-break"> They're just somewhere nobody looks.</span>
             </h1>
             <p className="aw-lede aw-rise aw-rise-3">
-              Standings, schedule, and player cards — under your club’s name and colors, without
-              tearing up WordPress.
+              A spreadsheet the convenor updates on Sunday nights. A SportsPress plugin. A league
+              page that hasn't been restyled since 2011. <strong>We read whichever one you already
+              have</strong> and turn it into a board your players actually open.
             </p>
             <div className="aw-cta aw-rise aw-rise-4">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
-            onClick={() => trackMarketingClick("book_demo")}>
-                Book a demo
+              <a className="aw-btn aw-btn-primary" href={START_HREF}
+                onClick={() => trackMarketingClick("hero_start")}>
+                Send us your stats link
               </a>
               <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}
-            onClick={() => trackMarketingClick("live_demo")}>
+                onClick={() => trackMarketingClick("live_demo")}>
                 See a live league
               </a>
+            </div>
+
+            {/* The thesis, drawn: three real sources resolving into one board row. */}
+            <div className="aw-rig aw-rise aw-rise-4">
+              <div className="aw-sources">
+                <div className="aw-src aw-src--sheet">
+                  <b>Google Sheet</b>
+                  season,name,team,gp,td,c1,c2
+                </div>
+                <div className="aw-src aw-src--sp">
+                  <b>SportsPress</b>
+                  /wp-json/sportspress/v2/lists
+                </div>
+                <div className="aw-src aw-src--esd">
+                  <b>eSportsDesk</b>
+                  stats_football_flag.cfm?leagueID=…
+                </div>
+              </div>
+              <div className="aw-rig-arrow" aria-hidden="true">→</div>
+              <div className="aw-board-out">
+                <div className="aw-board-who">
+                  <span className="aw-board-name">Mike Jutzi</span>
+                  <span className="aw-board-team">Barbarian Jackets</span>
+                </div>
+                <div className="aw-statline">
+                  <div className="aw-stat"><span className="aw-stat-k">GP</span><span className="aw-stat-v">4</span></div>
+                  <div className="aw-stat aw-stat--hot"><span className="aw-stat-k">TD</span><span className="aw-stat-v">4</span></div>
+                  <div className="aw-stat"><span className="aw-stat-k">C1</span><span className="aw-stat-v">0</span></div>
+                  <div className="aw-stat"><span className="aw-stat-k">C2</span><span className="aw-stat-v">0</span></div>
+                  <div className="aw-stat aw-stat--hot"><span className="aw-stat-k">PTS</span><span className="aw-stat-v">24</span></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="aw-proof" aria-label="Built for rec leagues">
-          <p className="aw-proof-label">Made for rec leagues that already post stats online</p>
+        <section className="aw-proof" aria-label="Leagues already live">
+          <p className="aw-proof-label">Live now</p>
           <ul className="aw-proof-list">
-            <li>Flag football</li>
-            <li>Softball</li>
-            <li>Soccer</li>
-            <li>Standings &amp; schedule</li>
-            <li>Player cards</li>
+            {LIVE_LEAGUES.map((league) => (
+              <li key={league.name}>
+                <strong>{league.name}</strong>
+                <span>{league.detail}</span>
+              </li>
+            ))}
           </ul>
         </section>
 
-        <section className="aw-section aw-problem aw-split" aria-labelledby="aw-problem-title">
-          <div className="aw-split-copy aw-problem-copy">
-            <h2 id="aw-problem-title" className="aw-section-title">
-              Fans want a board they can actually use
+        <section className="aw-section" id="sources" aria-labelledby="aw-sources-title">
+          <div className="aw-product-head">
+            <h2 id="aw-sources-title" className="aw-section-title">
+              We meet your data where it is
             </h2>
             <p className="aw-section-lede">
-              You’re already tracking games. What’s missing is a clean place for standings and
-              player stats — without rebuilding the whole site.
+              Most league software asks you to move everything over first. We don't. If your
+              numbers are published somewhere — anywhere — that's the integration.
             </p>
-            <ul className="aw-pain">
-              <li>
-                <strong>Stats are hard to find</strong>
-                <span>Buried in old tables nobody bookmarks after the game.</span>
-              </li>
-              <li>
-                <strong>Running more than one league is painful</strong>
-                <span>A second brand usually means copying the whole website.</span>
-              </li>
-              <li>
-                <strong>You don’t want to start over</strong>
-                <span>Registration, news, and schedules already work where they are.</span>
-              </li>
-            </ul>
           </div>
-          <figure className="aw-shot aw-shot-problem">
-            <img
-              src="/marketing/aw-problem-contrast.png"
-              alt="Old standings table next to a clean branded stats board"
-              width={1400}
-              height={1050}
-              loading="lazy"
-            />
-          </figure>
+          <div className="aw-lanes">
+            {SOURCES.map((source) => (
+              <div className="aw-lane" key={source.name}>
+                <span className="aw-lane-tag">{source.tag}</span>
+                <h3>{source.name}</h3>
+                <p>{source.copy}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="aw-section aw-product" id="product" aria-labelledby="aw-product-title">
@@ -229,21 +301,17 @@ export function MarketingHome() {
               Same numbers. Better board.
             </h2>
             <p className="aw-section-lede">
-              We take the standings and player stats you already post and put them on a fast board
-              that looks like your club. This one is live — search it, sort it, open a player. It
-              is the same board running at{" "}
-              <a
-                href={LIVE_LEAGUE_URL}
-                onClick={() => trackMarketingClick("live_demo")}
-              >
+              Sorted, searchable and fast on a phone in a parking lot. This one is live — search
+              it, sort it, open a player. It's the same board running at{" "}
+              <a href={LIVE_LEAGUE_URL} onClick={() => trackMarketingClick("live_demo")}>
                 tuff.afterwhistle.ca
               </a>.
             </p>
           </div>
           <MarketingDemo />
           <p className="aw-demo-caption">
-            Harbor Flag Football is a sample league. Your board shows your teams, your players, and
-            your colors.
+            Harbor Flag Football is a sample league. Your board shows your teams, your players and
+            your colours.
           </p>
         </section>
 
@@ -253,8 +321,7 @@ export function MarketingHome() {
               Cards players actually share
             </h2>
             <p className="aw-section-lede">
-              Season stats on a trading card you can print or send — not another spreadsheet
-              screenshot.
+              A season on one card you can print or send — not another spreadsheet screenshot.
             </p>
           </div>
           <div className="aw-card-preview">
@@ -267,105 +334,65 @@ export function MarketingHome() {
         <section className="aw-section aw-how aw-how-stack" id="how" aria-labelledby="aw-how-title">
           <div className="aw-how-intro">
             <h2 id="aw-how-title" className="aw-section-title">
-              How it works
+              Live in days, not seasons
             </h2>
             <p className="aw-section-lede">Three steps. Your website stays where it is.</p>
           </div>
-          <figure className="aw-shot aw-shot-how">
-            <img
-              src="/marketing/aw-how-steps.png"
-              alt="Pull your stats, add your brand, go live"
-              width={1400}
-              height={1050}
-              loading="lazy"
-            />
-          </figure>
           <ol className="aw-steps aw-steps-row">
             <li>
               <span className="aw-step-num">01</span>
               <div>
-                <strong>Pull your stats</strong>
-                <p>We use the standings and player stats you already post — or start with a demo.</p>
+                <strong>Send us a link</strong>
+                <p>Your stats page, your sheet, your plugin. We'll tell you what we can read from it — usually the same day.</p>
               </div>
             </li>
             <li>
               <span className="aw-step-num">02</span>
               <div>
-                <strong>Make it yours</strong>
-                <p>Your link, your colors, your club name. Each league looks like its own.</p>
+                <strong>We make it yours</strong>
+                <p>Your club colours, your crest, your subdomain. Multiple leagues each get their own identity.</p>
               </div>
             </li>
             <li>
               <span className="aw-step-num">03</span>
               <div>
-                <strong>Go live</strong>
-                <p>Fans and captains get a fast board they can open on any phone.</p>
+                <strong>Share the link</strong>
+                <p>That's the whole migration. Registration, news and your site stay exactly where they are.</p>
               </div>
             </li>
           </ol>
         </section>
 
-        <section className="aw-section aw-audience" aria-labelledby="aw-audience-title">
-          <div className="aw-audience-head">
-            <h2 id="aw-audience-title" className="aw-section-title">
-              Who it’s for
-            </h2>
-            <p className="aw-section-lede">
-              Rec leagues and clubs that already run on WordPress — and people running more than one
-              brand.
-            </p>
-          </div>
-          <figure className="aw-shot aw-shot-audience">
-            <img
-              src="/marketing/aw-audience-field.png"
-              alt="Adult rec league game under the lights"
-              width={1600}
-              height={900}
-              loading="lazy"
-            />
-          </figure>
-          <ul className="aw-audience-list">
-            <li>
-              <strong>League directors</strong>
-              <p>One place for every league. Add a club without rebuilding everything.</p>
-            </li>
-            <li>
-              <strong>Captains</strong>
-              <p>Rosters, schedule, and cards that feel like your team — not a generic plugin page.</p>
-            </li>
-            <li>
-              <strong>Multi-sport clubs</strong>
-              <p>Softball one night, soccer the next — the board shows the right stats for each.</p>
-            </li>
-          </ul>
-        </section>
-
         <section className="aw-section aw-pricing" id="pricing" aria-labelledby="aw-pricing-title">
           <div className="aw-pricing-head">
             <h2 id="aw-pricing-title" className="aw-section-title">
-              Simple pricing
+              See it on your data first. Then pick a plan.
             </h2>
             <p className="aw-section-lede">
-              TUFF runs free forever as our founding partner. Every other league gets the same board
-              — pick the plan that fits your club.
+              Send us the link to wherever your stats live and we'll build your board and show you —
+              no charge, no commitment. If you like it, it goes live on one of these.
             </p>
-          </div>
-
-          <div className="aw-pricing-founder">
-            <div className="aw-pricing-founder-copy">
-              <span className="aw-pricing-founder-label">Founding partner</span>
-              <strong>Toronto United Flag Football</strong>
-              <p>
-                Full board, shareable player links, and trading cards — free for TUFF fans, always.
-              </p>
+            <div className="aw-billing" role="group" aria-label="Billing period">
+              <button
+                type="button"
+                aria-pressed={billing === "season"}
+                onClick={() => { setBilling("season"); trackMarketingClick("billing_season"); }}
+              >
+                Per season
+              </button>
+              <button
+                type="button"
+                aria-pressed={billing === "month"}
+                onClick={() => { setBilling("month"); trackMarketingClick("billing_month"); }}
+              >
+                Monthly
+              </button>
             </div>
-            <a
-              className="aw-btn aw-btn-ghost aw-pricing-founder-link"
-              href={LIVE_LEAGUE_URL}
-              onClick={() => trackMarketingClick("pricing_tuff_demo")}
-            >
-              See TUFF live
-            </a>
+            <p className="aw-billing-note">
+              {billing === "season"
+                ? "Built for how leagues budget — one charge per season, out of registration fees. Nothing to pay in the off-season."
+                : "Year-round billing — for clubs running back-to-back seasons with no real off-season."}
+            </p>
           </div>
 
           <div className="aw-pricing-grid">
@@ -374,11 +401,11 @@ export function MarketingHome() {
                 key={plan.id}
                 className={`aw-price-card${plan.featured ? " aw-price-card--featured" : ""}`}
               >
-                {plan.featured ? <span className="aw-price-badge">Most popular</span> : null}
+                {plan.featured ? <span className="aw-price-badge">Most leagues pick this</span> : null}
                 <h3 className="aw-price-name">{plan.name}</h3>
                 <p className="aw-price-amount">
-                  <span>{plan.price}</span>
-                  <small>{plan.period}</small>
+                  {billing === "season" ? plan.season : plan.month}
+                  <span>{billing === "season" ? " / season" : " / month"}</span>
                 </p>
                 <p className="aw-price-blurb">{plan.blurb}</p>
                 <ul className="aw-price-features">
@@ -387,39 +414,35 @@ export function MarketingHome() {
                   ))}
                 </ul>
                 <a
-                  className={`aw-btn ${plan.featured ? "aw-btn-primary" : "aw-btn-ghost"} aw-price-cta`}
-                  href={checkoutHref(plan)}
-                  onClick={() => trackMarketingClick(`pricing_${plan.id}`)}
+                  className={`aw-btn aw-price-cta ${plan.featured ? "aw-btn-primary" : "aw-btn-ghost"}`}
+                  href={START_HREF}
+                  onClick={() => trackMarketingClick(`plan_${plan.id}`)}
                 >
-                  {plan.cta}
+                  Get {plan.name}
                 </a>
               </article>
             ))}
-          </div>
 
-          <p className="aw-pricing-note">
-            One-time setup from $299 for SportsPress wiring, branding, and go-live. Founding leagues
-            outside TUFF may qualify for a launch discount — ask when you book a demo.
-          </p>
-        </section>
-
-        <section className="aw-mid-cta" aria-label="Book a demo">
-          <div className="aw-mid-cta-inner">
-            <h2 className="aw-section-title">See your league on Afterwhistle</h2>
-            <p className="aw-section-lede">
-              Send us a link to your standings page. We’ll show you what a board for your club can
-              look like.
-            </p>
-            <div className="aw-cta">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
-            onClick={() => trackMarketingClick("book_demo")}>
-                Book a demo
+            <article className="aw-price-card">
+              <h3 className="aw-price-name">Setup</h3>
+              <p className="aw-price-amount">
+                $299<span> once</span>
+              </p>
+              <p className="aw-price-blurb">
+                Getting your league's data flowing, once. Charged up front, never monthly.
+              </p>
+              <ul className="aw-price-features">
+                <li>We connect your existing source</li>
+                <li>Every past season we can reach, loaded</li>
+                <li>Branding and domain configured</li>
+                <li>Same price whatever you run on</li>
+                <li>Waived for founding leagues</li>
+              </ul>
+              <a className="aw-btn aw-btn-ghost aw-price-cta" href={START_HREF}
+                onClick={() => trackMarketingClick("plan_setup")}>
+                Get started
               </a>
-              <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}
-            onClick={() => trackMarketingClick("live_demo")}>
-                See a live league
-              </a>
-            </div>
+            </article>
           </div>
         </section>
 
@@ -427,64 +450,117 @@ export function MarketingHome() {
           <div className="aw-faq-layout">
             <div className="aw-faq-intro">
               <h2 id="aw-faq-title" className="aw-section-title">
-                FAQ
+                The honest answers
               </h2>
-              <p className="aw-section-lede">Quick answers for directors and captains.</p>
+              <p className="aw-section-lede">Questions convenors actually ask.</p>
             </div>
             <div className="aw-faq-list">
-              {FAQS.map((item) => (
-                <details
-                  key={item.q}
-                  className="aw-faq-item"
-                  onToggle={(event) => {
-                    if (event.currentTarget.open) {
-                      trackEvent("marketing_faq_open", { question: item.q });
-                    }
-                  }}
-                >
-                  <summary>{item.q}</summary>
-                  <p>{item.a}</p>
+              {FAQS.map((faq) => (
+                <details className="aw-faq-item" key={faq.q}>
+                  <summary>{faq.q}</summary>
+                  <p>{faq.a}</p>
                 </details>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="aw-section aw-close aw-split" aria-labelledby="aw-close-title">
-          <div className="aw-split-copy aw-close-copy">
-            <h2 id="aw-close-title" className="aw-brand aw-brand-sm">
-              Afterwhistle
-            </h2>
-            <p className="aw-headline aw-headline-sm">
-              When the whistle blows,
-              <span className="aw-headline-break"> the board is already live.</span>
-            </p>
-            <div className="aw-cta">
-              <a className="aw-btn aw-btn-primary" href={DEMO_HREF}
-            onClick={() => trackMarketingClick("book_demo")}>
-                Book a demo
-              </a>
+        <section className="aw-section aw-close" id="start" aria-labelledby="aw-close-title">
+          <div className="aw-start-grid">
+            <div>
+              <p className="aw-brand aw-brand-sm">After the whistle</p>
+              <h2 id="aw-close-title" className="aw-section-title">
+                Send a link. Get a board.
+              </h2>
+              <p className="aw-section-lede">
+                Tell us where your stats live today and we'll build your league's board on your
+                real data — teams, players, past seasons — and send it back to look at.
+              </p>
+              <ul className="aw-assure">
+                <li>No charge and no commitment for the first board.</li>
+                <li>We only read what you already publish. Nothing on your site changes.</li>
+                <li>Usually back to you within a couple of days.</li>
+                <li>No link handy? Send the form anyway and we'll work it out.</li>
+              </ul>
             </div>
+
+            {formState === "sent" ? (
+              <div className="aw-start-done" role="status">
+                <h3>Got it — thanks.</h3>
+                <p>
+                  We'll take a look at your stats and come back with a board, usually within a
+                  couple of days. If we have questions we'll just reply to your email.
+                </p>
+                <a className="aw-btn aw-btn-ghost" href={LIVE_LEAGUE_URL}
+                  onClick={() => trackMarketingClick("live_demo_after_submit")}>
+                  See a live league meanwhile
+                </a>
+              </div>
+            ) : (
+              <form className="aw-start" onSubmit={submitLead}>
+                <div className="aw-field-row">
+                  <label className="aw-field">
+                    <span>League or club</span>
+                    <input name="league" type="text" placeholder="Central Toronto Touch Football" required />
+                  </label>
+                  <label className="aw-field">
+                    <span>Sport</span>
+                    <select name="sport" defaultValue="Flag football">
+                      <option>Flag football</option>
+                      <option>Touch football</option>
+                      <option>Softball</option>
+                      <option>Soccer</option>
+                      <option>Something else</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="aw-field">
+                  <span>
+                    Where your stats live today
+                    <em> — a sheet, a stats page, your league platform</em>
+                  </span>
+                  <input name="statsUrl" type="url" inputMode="url" placeholder="https://…" />
+                </label>
+
+                <label className="aw-field">
+                  <span>Your email</span>
+                  <input name="email" type="email" placeholder="you@yourleague.ca" required />
+                </label>
+
+                <label className="aw-field">
+                  <span>Anything we should know<em> — optional</em></span>
+                  <textarea name="notes" rows={2} placeholder="Two divisions, and we've got 2019 onward in an old spreadsheet." />
+                </label>
+
+                {/* Honeypot: bots fill this, people never see it. */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="aw-hp"
+                />
+
+                <button className="aw-btn aw-btn-primary" type="submit" disabled={formState === "sending"}>
+                  {formState === "sending" ? "Sending…" : "Build my board"}
+                </button>
+                {formError ? <p className="aw-form-error">{formError}</p> : null}
+                <p className="aw-form-foot">
+                  We'll only use this to reply about your league. No list, no newsletter.
+                </p>
+              </form>
+            )}
           </div>
-          <figure className="aw-shot aw-shot-close">
-            <img
-              src="/marketing/aw-close-whistle.png"
-              alt="Whistle and scoreboard after the final play"
-              width={1400}
-              height={1050}
-              loading="lazy"
-            />
-          </figure>
         </section>
       </main>
 
       <footer className="aw-foot">
-        <span>Afterwhistle</span>
-        <div className="aw-foot-links">
-          <a href={LIVE_LEAGUE_URL}
-            onClick={() => trackMarketingClick("live_demo")}>Live demo</a>
-          <a href={`mailto:${DEMO_MAIL}`} onClick={() => trackMarketingClick("contact")}>Contact</a>
-        </div>
+        <span>Afterwhistle — league stats boards</span>
+        <span className="aw-foot-links">
+          <a href="mailto:info@afterwhistle.ca">info@afterwhistle.ca</a>
+        </span>
       </footer>
     </div>
   );
