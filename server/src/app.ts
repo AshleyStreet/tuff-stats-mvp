@@ -15,6 +15,19 @@ import {
   updateAdminTenant
 } from "./leagues/admin.js";
 import { refreshTokenFor } from "./leagues/adminTokens.js";
+import { probeSourceUrl } from "./leagues/probe.js";
+import { notifyConfigured, notifyNewLead } from "./leads/notify.js";
+import {
+  attachProbe,
+  createLead,
+  deleteLead,
+  LeadError,
+  listLeads,
+  parseLeadInput,
+  setLeadStatus,
+  type Lead,
+  type LeadProbe
+} from "./leads/store.js";
 import { getLeagueByHostname, getLeagueBySlug, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
@@ -150,6 +163,107 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
 
   app.get("/api/status", (req, res) => {
     res.json(tenant(req).adapter.status());
+  });
+
+  /**
+   * Public, unauthenticated write — so it is rate limited per IP and carries a
+   * honeypot. Kept deliberately small: anything heavier (probing the submitted
+   * URL, emailing) happens after the response so a slow upstream never costs
+   * the person filling in the form.
+   */
+  const leadHits = new Map<string, number[]>();
+  const LEAD_WINDOW_MS = 10 * 60 * 1000;
+  const LEAD_MAX_PER_WINDOW = 5;
+
+  function leadRateLimited(ip: string) {
+    const now = Date.now();
+    const recent = (leadHits.get(ip) ?? []).filter((at) => now - at < LEAD_WINDOW_MS);
+    recent.push(now);
+    leadHits.set(ip, recent);
+    if (leadHits.size > 500) {
+      for (const [key, stamps] of leadHits) {
+        if (!stamps.some((at) => now - at < LEAD_WINDOW_MS)) leadHits.delete(key);
+      }
+    }
+    return recent.length > LEAD_MAX_PER_WINDOW;
+  }
+
+  async function enrichLead(lead: Lead) {
+    if (lead.statsUrl) {
+      let probe: LeadProbe;
+      try {
+        const result = await probeSourceUrl(lead.statsUrl);
+        probe = {
+          ok: result.ok,
+          platform: result.detectedPlatform,
+          platformLabel: result.platformLabel,
+          detectedIds: result.detectedIds,
+          adapter: result.adapter,
+          sport: result.sport,
+          siteName: result.siteName,
+          seasons: result.seasons.length,
+          tables: result.tables.length,
+          lists: result.lists.length,
+          sportspressLive: result.sportspressLive,
+          teams: result.franchiseTeamNames.length,
+          warnings: result.warnings
+        };
+      } catch (error) {
+        probe = { ok: false, error: error instanceof Error ? error.message : "probe failed" };
+      }
+      attachProbe(lead.id, probe);
+      lead = { ...lead, probe };
+    }
+
+    const notified = await notifyNewLead(lead);
+    if (!notified.sent && notified.reason !== "RESEND_API_KEY not set") {
+      console.warn(`Lead ${lead.id} stored but not emailed: ${notified.reason}`);
+    }
+  }
+
+  app.post("/api/leads", (req, res) => {
+    const ip = (req.ip ?? req.socket.remoteAddress ?? "unknown").toString();
+    if (leadRateLimited(ip)) {
+      return res.status(429).json({ error: "That's a few too many in a row — email us instead." });
+    }
+    // Bots fill hidden fields; people never see this one.
+    if (String((req.body ?? {}).website ?? "").trim()) {
+      return res.status(202).json({ ok: true });
+    }
+
+    let lead;
+    try {
+      lead = createLead(parseLeadInput(req.body));
+    } catch (error) {
+      if (error instanceof LeadError) return res.status(error.status).json({ error: error.message });
+      return res.status(500).json({ error: "Could not save that. Try again in a moment." });
+    }
+
+    // Answer immediately; probing and email run behind the response.
+    res.status(201).json({ ok: true, id: lead.id });
+    void enrichLead(lead).catch(() => undefined);
+    return undefined;
+  });
+
+  app.get("/api/admin/leads", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    res.json({ leads: listLeads(), emailConfigured: notifyConfigured() });
+  });
+
+  app.put("/api/admin/leads/:id", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const status = String(req.body?.status ?? "");
+    if (status !== "new" && status !== "contacted" && status !== "archived") {
+      return res.status(400).json({ error: "Status must be new, contacted, or archived" });
+    }
+    const updated = setLeadStatus(String(req.params.id), status);
+    if (!updated) return res.status(404).json({ error: "Lead not found" });
+    return res.json({ lead: updated });
+  });
+
+  app.delete("/api/admin/leads/:id", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    return res.json({ deleted: deleteLead(String(req.params.id)) });
   });
 
   app.get("/api/admin/tenants", (req, res) => {

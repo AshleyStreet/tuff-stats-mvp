@@ -5,6 +5,8 @@ server/dist
 client/dist
 server/.cache
 server/.tenants
+# Inbound leads hold submitters' email addresses — never commit them.
+server/.leads
 .env
 server/.env
 deploy/lightsail/.env

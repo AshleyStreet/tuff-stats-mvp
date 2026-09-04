@@ -13,6 +13,14 @@ export type ProbeSeason = {
   seasonSlug?: string;
 };
 
+/**
+ * What the URL is running on. Separate from `adapter`, which stays "what would
+ * we create this tenant as with no further config" — eSportsDesk and CSV both
+ * still need hand-configuration (client/league ids, sheet URLs), so they are not
+ * creation defaults even when we can clearly read them.
+ */
+export type DetectedPlatform = "sportspress" | "esportsdesk" | "csv" | "unknown";
+
 export type SourceProbeResult = {
   ok: boolean;
   origin: string;
@@ -20,6 +28,11 @@ export type SourceProbeResult = {
   siteName?: string;
   sportspress: boolean;
   sportspressLive: boolean;
+  /** Platform we recognised, for qualifying an inbound league. */
+  detectedPlatform: DetectedPlatform;
+  platformLabel: string;
+  /** Ids pulled off a recognised URL, so onboarding does not have to re-derive them. */
+  detectedIds?: Record<string, string>;
   adapter: "fixture" | "sportspress";
   sport: SupportedSport;
   suggestedSlug: string;
@@ -246,6 +259,45 @@ export function buildSportspressSource(input: {
   };
 }
 
+/**
+ * Recognises a platform from the URL alone, before any network call. Cheap, and
+ * it means an eSportsDesk or spreadsheet link is identified rather than reported
+ * as "no SportsPress detected" — which reads like a dead end when it isn't.
+ */
+export function detectPlatform(rawUrl: string): {
+  platform: DetectedPlatform;
+  label: string;
+  ids?: Record<string, string>;
+} {
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
+  } catch {
+    return { platform: "unknown", label: "Unrecognised link" };
+  }
+
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (host.endsWith("esportsdesk.com")) {
+    const ids: Record<string, string> = {};
+    for (const key of ["leagueID", "clientID"]) {
+      const found = [...url.searchParams.entries()].find(([k]) => k.toLowerCase() === key.toLowerCase());
+      if (found?.[1]) ids[key] = found[1];
+    }
+    return { platform: "esportsdesk", label: "eSportsDesk", ids: Object.keys(ids).length ? ids : undefined };
+  }
+
+  if (host.includes("docs.google.com") && path.includes("/spreadsheets/")) {
+    return { platform: "csv", label: "Google Sheets" };
+  }
+  if (path.endsWith(".csv") || url.searchParams.get("output") === "csv") {
+    return { platform: "csv", label: "CSV export" };
+  }
+
+  return { platform: "unknown", label: "Not recognised from the link alone" };
+}
+
 export async function probeSourceUrl(rawUrl: string, fetchImpl?: ProbeFetch): Promise<SourceProbeResult> {
   const fetcher: ProbeFetch =
     fetchImpl ??
@@ -268,6 +320,8 @@ export async function probeSourceUrl(rawUrl: string, fetchImpl?: ProbeFetch): Pr
       hostname: "",
       sportspress: false,
       sportspressLive: false,
+      detectedPlatform: "unknown",
+      platformLabel: "Unrecognised link",
       adapter: "fixture",
       sport: "flag-football",
       suggestedSlug: "tenant",
@@ -280,6 +334,39 @@ export async function probeSourceUrl(rawUrl: string, fetchImpl?: ProbeFetch): Pr
       tables: [],
       lists: [],
       warnings: ["Enter a valid URL like https://example.com"]
+    };
+  }
+
+  const detected = detectPlatform(rawUrl);
+  const hostnameEarly = hostnameFromOrigin(origin);
+  const slugEarly = slugFromHostname(hostnameEarly);
+
+  // A recognised non-WordPress platform: no point asking it for /wp-json.
+  if (detected.platform === "esportsdesk" || detected.platform === "csv") {
+    return {
+      ok: true,
+      origin,
+      hostname: hostnameEarly,
+      siteName: detected.label,
+      sportspress: false,
+      sportspressLive: false,
+      detectedPlatform: detected.platform,
+      platformLabel: detected.label,
+      detectedIds: detected.ids,
+      adapter: "fixture",
+      sport: "flag-football",
+      suggestedSlug: slugEarly,
+      suggestedName: detected.label,
+      suggestedShortName: shortNameFrom(slugEarly),
+      publicSeason: String(new Date().getFullYear()),
+      hostnames: [hostnameEarly],
+      franchiseTeamNames: [],
+      seasons: [],
+      tables: [],
+      lists: [],
+      warnings: [
+        `${detected.label} recognised — we can read this, but it needs its ids and seasons configured by hand rather than auto-created here.`
+      ]
     };
   }
 
@@ -306,6 +393,8 @@ export async function probeSourceUrl(rawUrl: string, fetchImpl?: ProbeFetch): Pr
       siteName,
       sportspress: false,
       sportspressLive: false,
+      detectedPlatform: "unknown",
+      platformLabel: "No SportsPress found",
       adapter: "fixture",
       sport: "flag-football",
       suggestedSlug,
@@ -409,6 +498,8 @@ export async function probeSourceUrl(rawUrl: string, fetchImpl?: ProbeFetch): Pr
     siteName,
     sportspress,
     sportspressLive,
+    detectedPlatform: "sportspress",
+    platformLabel: sportspressLive ? "SportsPress (live)" : "SportsPress (no data yet)",
     adapter,
     sport,
     suggestedSlug,

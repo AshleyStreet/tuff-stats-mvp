@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, ExternalLink, Plus, Radar, RefreshCw, Save, Trash2 } from "lucide-react";
+import { AdminLeads } from "./AdminLeads";
 import { FEATURE_KEYS, FEATURE_LABELS } from "../league/features";
 import type {
   AdminTenant,
@@ -253,6 +254,7 @@ export function AdminDashboard() {
   const [statusLoading, setStatusLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [view, setView] = useState<"tenants" | "leads">("tenants");
 
   const selected = useMemo(
     () => (selectedSlug && selectedSlug !== "new" ? tenants.find((item) => item.slug === selectedSlug) : undefined),
@@ -629,6 +631,22 @@ export function AdminDashboard() {
 
       <div className="page-grid admin-grid">
         <aside className="sidebar">
+          <div className="admin-view-switch" role="group" aria-label="Admin section">
+            <button
+              type="button"
+              className={view === "tenants" ? "active" : undefined}
+              onClick={() => setView("tenants")}
+            >
+              Tenants
+            </button>
+            <button
+              type="button"
+              className={view === "leads" ? "active" : undefined}
+              onClick={() => setView("leads")}
+            >
+              Leads
+            </button>
+          </div>
           <div className="eyebrow">TENANTS</div>
           {loading ? <p className="captain-hint">Loading…</p> : null}
           {tenants.map((tenant) => (
@@ -648,6 +666,7 @@ export function AdminDashboard() {
         </aside>
 
         <main>
+          {view === "leads" ? <AdminLeads token={token} /> : (
           <form className="admin-form" onSubmit={save}>
             <div className="section-head">
               <div>
@@ -994,6 +1013,7 @@ export function AdminDashboard() {
               {selected?.builtIn ? " Built-in ingest URLs and adapter cannot be changed here." : ""}
             </p>
           </form>
+          )}
         </main>
       </div>
     </div>
