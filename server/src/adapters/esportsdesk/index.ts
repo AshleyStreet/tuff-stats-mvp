@@ -173,6 +173,117 @@ function parseStandings(html: string): TeamStanding[] {
   return standings.map((row, index) => ({ ...row, pos: index + 1 }));
 }
 
+export type EsportsdeskInspection = {
+  ok: boolean;
+  clientId: string;
+  leagueId?: string;
+  leagueName?: string;
+  standings: TeamStanding[];
+  players: number;
+  /** Highest games-played in the table — tells you mid-season from wrapped. */
+  gamesPlayed: number;
+  topScorer?: { name: string; team?: string; points: number };
+  /** One concrete line you can put in an email. */
+  headline?: string;
+  notes: string[];
+};
+
+async function inspectFetch(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+      signal: AbortSignal.timeout(20000)
+    });
+    return response.ok ? await response.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Qualifies a prospect league without configuring a tenant: can we read it,
+ * how big is it, and is the season live. Uses the same parsers the adapter
+ * uses, so the answer can't drift from what the product would actually do.
+ */
+export async function inspectEsportsdeskLeague(
+  clientId: string,
+  leagueId?: string
+): Promise<EsportsdeskInspection> {
+  const notes: string[] = [];
+  if (OPTED_OUT_CLIENT_IDS.has(clientId)) {
+    return { ok: false, clientId, standings: [], players: 0, gamesPlayed: 0, notes: ["This client has opted out in robots.txt — do not approach."] };
+  }
+
+  let resolved = leagueId;
+  if (!resolved) {
+    const landing = await inspectFetch(`${ORIGIN}/clear.cfm?clientid=${encodeURIComponent(clientId)}`);
+    resolved = /leagueID=(\d+)/i.exec(landing ?? "")?.[1];
+    if (!resolved) notes.push("No leagueID discoverable from the landing page — pass one explicitly.");
+  }
+  if (!resolved) {
+    return { ok: false, clientId, standings: [], players: 0, gamesPlayed: 0, notes };
+  }
+
+  const params = `leagueID=${encodeURIComponent(resolved)}&clientID=${encodeURIComponent(clientId)}`;
+  const standingsHtml = await inspectFetch(`${ORIGIN}/standings.cfm?${params}`);
+  const standings = standingsHtml ? parseStandings(standingsHtml) : [];
+  const leagueName = /<title[^>]*>([^<]*?)(?:\s*-\s*Powered By)?<\/title>/i
+    .exec(standingsHtml ?? "")?.[1]
+    ?.trim();
+
+  const statsHtml = await inspectFetch(
+    `${ORIGIN}/${DEFAULT_STATS_PAGE}?${params}&statType=Player&showGameType=2&sortby=PTS1&selectedDivID=0&start_row=1`
+  );
+  const parsed = statsHtml ? parsePlayerRows(statsHtml) : { headers: [], rows: [] };
+
+  let topScorer: EsportsdeskInspection["topScorer"];
+  for (const row of parsed.rows) {
+    const record = alignToHeaders(parsed.headers, row.cells);
+    const name = (record.PLAYER ?? "").trim();
+    if (!name || name.toUpperCase() === "PLAYER") continue;
+    const points = toNumber(record.PTS);
+    if (!topScorer || points > topScorer.points) {
+      topScorer = { name, team: (record.TEAM ?? "").trim() || undefined, points };
+    }
+  }
+
+  const gamesPlayed = standings.reduce((max, row) => Math.max(max, row.wins + row.losses + row.ties), 0);
+  if (!standings.length) notes.push("No standings table found.");
+  if (!parsed.rows.length) notes.push("No player stats published — board would be standings and schedule only.");
+
+  // A roster can exist with every stat at zero — the league simply hasn't
+  // recorded any yet. Quoting a "top scorer with 0 points" in an approach
+  // would be worse than quoting nothing, so drop the claim entirely.
+  if (parsed.rows.length && (!topScorer || topScorer.points <= 0)) {
+    topScorer = undefined;
+    notes.push("Roster is published but every stat is zero — they aren't recording player stats yet.");
+  }
+
+  const leader = standings[0];
+  const record = leader
+    ? `${leader.wins}-${leader.losses}${leader.ties ? `-${leader.ties}` : ""}`
+    : "";
+  const headline =
+    leader && topScorer
+      ? `${leader.name} lead at ${record}, and ${topScorer.name} tops scoring with ${topScorer.points} points.`
+      : leader
+        ? `${leader.name} lead at ${record}.`
+        : undefined;
+
+  return {
+    ok: standings.length > 0 || parsed.rows.length > 0,
+    clientId,
+    leagueId: resolved,
+    leagueName,
+    standings,
+    players: parsed.rows.length,
+    gamesPlayed,
+    topScorer,
+    headline,
+    notes
+  };
+}
+
 /**
  * Reads a league's public eSportsDesk pages. There is no API — every page is
  * server-rendered ColdFusion — so this parses the stats and standings tables.
