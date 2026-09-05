@@ -201,6 +201,38 @@ async function inspectFetch(url: string): Promise<string | null> {
 }
 
 /**
+ * Lists a client's leagues. eSportsDesk gives each division and each season
+ * its own leagueID, so a client is rarely one league — Toronto Touch Football
+ * is Men and Women under one clientID. Picking the first id found lands on an
+ * off-season division and reports an empty league that is actually thriving.
+ */
+export async function discoverEsportsdeskLeagues(
+  clientId: string
+): Promise<Array<{ leagueId: string; label: string }>> {
+  const html = await inspectFetch(`${ORIGIN}/pick_league.cfm?clientid=${encodeURIComponent(clientId)}`);
+  const found = new Map<string, string>();
+
+  if (html) {
+    const $ = cheerio.load(html);
+    $("a[href], option").each((_index, el) => {
+      const value = $(el).attr("href") ?? $(el).attr("value") ?? "";
+      const id = /leagueid=(\d+)/i.exec(value)?.[1];
+      const label = $(el).text().replace(/\s+/g, " ").trim();
+      // leagueID=0 is the "no league selected" nav entry, not a division.
+      if (id && id !== "0" && label && !found.has(id)) found.set(id, label);
+    });
+  }
+
+  if (!found.size) {
+    const landing = await inspectFetch(`${ORIGIN}/clear.cfm?clientid=${encodeURIComponent(clientId)}`);
+    const id = /leagueID=(\d+)/i.exec(landing ?? "")?.[1];
+    if (id && id !== "0") found.set(id, "(only league found)");
+  }
+
+  return [...found].map(([leagueId, label]) => ({ leagueId, label }));
+}
+
+/**
  * Qualifies a prospect league without configuring a tenant: can we read it,
  * how big is it, and is the season live. Uses the same parsers the adapter
  * uses, so the answer can't drift from what the product would actually do.
