@@ -404,8 +404,8 @@ export function MarketingHome() {
                 {plan.featured ? <span className="aw-price-badge">Most leagues pick this</span> : null}
                 <h3 className="aw-price-name">{plan.name}</h3>
                 <p className="aw-price-amount">
-                  {billing === "season" ? plan.season : plan.month}
-                  <span>{billing === "season" ? " / season" : " / month"}</span>
+                  <span>{billing === "season" ? plan.season : plan.month}</span>
+                  <small>{billing === "season" ? "/ season" : "/ month"}</small>
                 </p>
                 <p className="aw-price-blurb">{plan.blurb}</p>
                 <ul className="aw-price-features">
@@ -426,7 +426,8 @@ export function MarketingHome() {
             <article className="aw-price-card">
               <h3 className="aw-price-name">Setup</h3>
               <p className="aw-price-amount">
-                $299<span> once</span>
+                <span>$299</span>
+                <small>once</small>
               </p>
               <p className="aw-price-blurb">
                 Getting your league's data flowing, once. Charged up front, never monthly.
