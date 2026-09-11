@@ -78,8 +78,12 @@ export async function getSeasons() {
   return data;
 }
 
+/**
+ * The server marks an incomplete snapshot `partial`; anything else is a full
+ * board. Don't infer it from content — many leagues have no logos or standings.
+ */
 export function playersCacheReady(data: PlayersResponse) {
-  return Boolean(data.meta.teamLogos && Object.keys(data.meta.teamLogos).length);
+  return !data.meta.partial;
 }
 
 export async function getPlayers(season = "", options: { bypassCache?: boolean } = {}) {

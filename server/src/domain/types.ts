@@ -214,6 +214,11 @@ export type PlayersResponse = {
     standings?: TeamStanding[];
     teamLogos?: Record<string, string>;
     league?: LeagueRef;
+    /**
+     * Set on a cache-only snapshot that lacks parts a full read would attach
+     * (TUFF's logos and standings). Clients may render it but should refetch.
+     */
+    partial?: boolean;
   };
 };
 

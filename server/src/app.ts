@@ -592,7 +592,8 @@ async function loadBootstrapPayload(league: League, adapter: LeagueDataAdapter):
 
   try {
     const players = await adapter.getPlayers({ season: defaultSeason, cacheOnly: true });
-    if (!players.players.length) return null;
+    // A standings-only board (a league that publishes no player stats) is still a board.
+    if (!players.players.length && !players.meta.standings?.length) return null;
     return {
       league: toPublicLeague(league),
       seasons: { seasons, defaultSeason },

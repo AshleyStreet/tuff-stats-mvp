@@ -142,7 +142,7 @@ export interface PlayerGameLog {
 export interface PlayersResponse {
   players: Player[];
   meta: {
-    source: "sportspress" | "html" | "fixture";
+    source: "sportspress" | "html" | "fixture" | "csv";
     fetchedAt: string;
     total: number;
     teams: string[];
@@ -151,5 +151,7 @@ export interface PlayersResponse {
     standings?: TeamStanding[];
     teamLogos?: Record<string, string>;
     league?: LeagueRef;
+    /** A server-inlined snapshot missing parts of a full read — render it, then refetch. */
+    partial?: boolean;
   };
 }

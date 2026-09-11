@@ -1019,7 +1019,12 @@ export async function getPlayers(
   // HTML bootstrap: serve a warm snapshot only — never block on upstream APIs.
   if (!force && cacheOnly) {
     if (!cached) throw new Error("Season cache miss");
-    return withPlayersLeague(attachTeamLogosSync(cached.data));
+    const snapshot = withPlayersLeague(attachTeamLogosSync(cached.data));
+    // Logos and standings are attached by the full read path, which this one skips —
+    // flag the gap so the client shows the board and then refetches the rest.
+    const hasLogos = Boolean(snapshot.meta.teamLogos && Object.keys(snapshot.meta.teamLogos).length);
+    if (hasLogos && snapshot.meta.standings?.length) return snapshot;
+    return { ...snapshot, meta: { ...snapshot.meta, partial: true } };
   }
 
   // Career / warm-path reads: trust memory/disk snapshots; skip SportsPress fingerprint chatter.
