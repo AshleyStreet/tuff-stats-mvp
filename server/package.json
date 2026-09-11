@@ -8,6 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:live": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "prospect": "tsx scripts/prospect.ts"
   },
   "dependencies": {

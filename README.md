@@ -67,6 +67,20 @@ Then open:
 - API: http://localhost:4000/api/players
 - Health: http://localhost:4000/api/health
 
+## Tests
+
+```bash
+npm test
+```
+
+Runs offline in a few seconds. CI runs the same suite, plus both type-checks and a client build, on every pull request and before each image build.
+
+A few tests scrape real league websites (Bush League, Passion Soccer) to catch upstream changes. They're skipped by default because they fail whenever those sites are down; run them on purpose with:
+
+```bash
+npm run test:live
+```
+
 ## Environment variables
 
 Copy `server/.env.example` to `server/.env` if you want to override defaults.
