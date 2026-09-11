@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
   const gaId = env.VITE_GA_MEASUREMENT_ID?.trim();
 
   return {
+    // dist/.vite/manifest.json lets the server preload a lazy screen's hashed
+    // chunk on the routes that open it (server/src/lib/screenPreload.ts).
+    build: { manifest: true },
     plugins: [
       react(),
       {

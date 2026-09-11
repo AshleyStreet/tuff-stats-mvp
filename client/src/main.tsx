@@ -1,9 +1,6 @@
-import { StrictMode, useEffect, useState } from "react";
+import { lazy, StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { CaptainTools } from "./components/CaptainTools";
-import { MarketingHome } from "./components/MarketingHome";
 import { LeagueProvider } from "./league/LeagueProvider";
 import { isMarketingHost } from "./lib/marketingHost";
 import { applyPageBootstrap } from "./lib/bootstrap";
@@ -12,6 +9,13 @@ import "./styles.css";
 
 applyPageBootstrap();
 initAnalytics();
+
+// The stats board is what nearly every visitor opens, so it stays in the main bundle.
+// These screens (and what only they use: html-to-image, marketing.css, the demo league)
+// load on demand. The server preloads the right one per route; see lib/screenPreload.ts.
+const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
+const CaptainTools = lazy(() => import("./components/CaptainTools").then((m) => ({ default: m.CaptainTools })));
+const MarketingHome = lazy(() => import("./components/MarketingHome").then((m) => ({ default: m.MarketingHome })));
 
 function Root() {
   const [path, setPath] = useState(() => window.location.pathname);
@@ -33,17 +37,27 @@ function Root() {
   }, [path]);
 
   if (path === "/admin" || path.startsWith("/admin/")) {
-    return <AdminDashboard />;
+    return (
+      <Suspense fallback={null}>
+        <AdminDashboard />
+      </Suspense>
+    );
   }
 
   if (isMarketingHost()) {
-    return <MarketingHome />;
+    return (
+      <Suspense fallback={null}>
+        <MarketingHome />
+      </Suspense>
+    );
   }
 
   if (path === "/captain-tools" || path.startsWith("/captain-tools/")) {
     return (
       <LeagueProvider>
-        <CaptainTools />
+        <Suspense fallback={null}>
+          <CaptainTools />
+        </Suspense>
       </LeagueProvider>
     );
   }
