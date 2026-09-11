@@ -14,10 +14,10 @@ import type {
   TeamStanding
 } from "../../domain/types.js";
 import type { EsportsdeskSeasonSlice, League } from "../../leagues/types.js";
-import { readLeagueCache, writeLeagueCache } from "../../lib/cache.js";
 import { careerFromSeasons } from "../../lib/profile.js";
+import { createSnapshotCache, leagueFilePersistence } from "../../lib/snapshots.js";
 import { buildPlayer, emptyStats, headerMap, toNumber, uniqueTeamAliases } from "../../lib/stats.js";
-import type { AdapterStatus, AdapterWarmState, LeagueDataAdapter } from "../types.js";
+import type { AdapterFetchOpts, AdapterStatus, AdapterWarmState, LeagueDataAdapter } from "../types.js";
 
 const ORIGIN = "https://www.esportsdesk.com/leagues";
 const DEFAULT_STATS_PAGE = "stats_football_flag.cfm";
@@ -331,8 +331,6 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
   const statsPage = esd?.statsPage ?? DEFAULT_STATS_PAGE;
   const maxPages = esd?.maxPlayerPages ?? 25;
 
-  const playersCache = new Map<string, PlayersResponse>();
-  const standingsCache = new Map<string, TeamStanding[]>();
   let warmState: AdapterWarmState = {
     status: "idle",
     warmed: [],
@@ -373,30 +371,19 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
     return `${ORIGIN}/${page}?${params.toString()}`;
   }
 
-  async function loadStandings(key: string, force: boolean): Promise<TeamStanding[]> {
-    if (!force) {
-      const memory = standingsCache.get(key);
-      if (memory) return memory;
-      const disk = readLeagueCache<TeamStanding[]>(leagueId, `standings-${key}.json`);
-      if (disk?.payload?.length) {
-        standingsCache.set(key, disk.payload);
-        return disk.payload;
-      }
+  const standingsSnapshots = createSnapshotCache<TeamStanding[]>({
+    persist: leagueFilePersistence(leagueId, (key) => `standings-${key}.json`),
+    usable: (standings) => standings.length > 0,
+    async load(key) {
+      const slice = sliceFor(key);
+      if (!slice) return null;
+      const html = await fetchHtml(pageUrl("standings.cfm", slice));
+      const standings = html ? parseStandings(html) : [];
+      return standings.length ? { value: standings, fingerprint: `esd:${slice.leagueId}:${standings.length}` } : null;
     }
+  });
 
-    const slice = sliceFor(key);
-    if (!slice) return standingsCache.get(key) ?? [];
-    const html = await fetchHtml(pageUrl("standings.cfm", slice));
-    const standings = html ? parseStandings(html) : [];
-    if (standings.length) {
-      standingsCache.set(key, standings);
-      writeLeagueCache(leagueId, `standings-${key}.json`, `esd:${slice.leagueId}:${standings.length}`, standings);
-      return standings;
-    }
-    return standingsCache.get(key) ?? [];
-  }
-
-  async function loadPlayers(key: string, force: boolean): Promise<Player[]> {
+  async function loadPlayers(key: string): Promise<Player[]> {
     const slice = sliceFor(key);
     if (!slice) return [];
 
@@ -447,8 +434,7 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
     return players;
   }
 
-  async function buildPlayersPayload(key: string, force: boolean): Promise<PlayersResponse> {
-    const [players, standings] = await Promise.all([loadPlayers(key, force), loadStandings(key, force)]);
+  function playersPayload(key: string, players: Player[], standings: TeamStanding[]): PlayersResponse {
     const teams = uniqueTeamAliases(
       standings.map((row) => row.name),
       players.map((player) => player.team ?? "").filter(Boolean)
@@ -468,24 +454,23 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
     };
   }
 
-  async function getPlayersPayload(key: string, opts?: { force?: boolean; cacheOnly?: boolean }) {
-    if (!opts?.force) {
-      const memory = playersCache.get(key);
-      if (memory) return memory;
-      const disk = readLeagueCache<PlayersResponse>(leagueId, `season-${key}.json`);
-      if (disk?.payload?.players?.length) {
-        playersCache.set(key, disk.payload);
-        return disk.payload;
-      }
-      if (opts?.cacheOnly) throw new Error("Season cache miss");
+  const playersSnapshots = createSnapshotCache<PlayersResponse>({
+    persist: leagueFilePersistence(leagueId, (key) => `season-${key}.json`),
+    usable: (payload) => payload.players.length > 0 || (payload.meta.standings?.length ?? 0) > 0,
+    async load(key) {
+      // Standings ride inside the players payload, so rebuilding it re-reads them too.
+      const [players, table] = await Promise.all([loadPlayers(key), standingsSnapshots.revalidate(key)]);
+      // Nothing new from upstream: keep the previous board and its honest timestamp.
+      if (!players.length && !table.fresh) return null;
+      return { value: playersPayload(key, players, table.value ?? []), fingerprint: `esd:${key}:${players.length}` };
     }
+  });
 
-    const payload = await buildPlayersPayload(key, Boolean(opts?.force));
-    if (payload.players.length || payload.meta.standings?.length) {
-      playersCache.set(key, payload);
-      writeLeagueCache(leagueId, `season-${key}.json`, `esd:${key}:${payload.players.length}`, payload);
-    }
-    return payload;
+  async function getPlayersPayload(key: string, opts?: AdapterFetchOpts): Promise<PlayersResponse> {
+    const payload = await playersSnapshots.get(key, opts);
+    if (payload) return payload;
+    if (opts?.cacheOnly) throw new Error("Season cache miss");
+    return playersPayload(key, [], []);
   }
 
   const adapter: LeagueDataAdapter = {
@@ -505,18 +490,10 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
       );
     },
     async getPlayers(opts) {
-      return getPlayersPayload(seasonKey(opts?.season), {
-        force: opts?.force,
-        cacheOnly: opts?.cacheOnly
-      });
+      return getPlayersPayload(seasonKey(opts?.season), opts);
     },
     async getStandings(opts) {
-      const key = seasonKey(opts?.season);
-      if (!opts?.force) {
-        const cached = standingsCache.get(key);
-        if (cached) return cached;
-      }
-      return loadStandings(key, Boolean(opts?.force));
+      return (await standingsSnapshots.get(seasonKey(opts?.season), opts)) ?? [];
     },
     async getSchedule(opts): Promise<ScheduleResponse> {
       // Schedule parsing is a separate pass — schedules.cfm has its own layout.
@@ -537,7 +514,7 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
       let identity: Player | undefined;
 
       for (const season of seasons) {
-        const payload = playersCache.get(season.year) ?? readLeagueCache<PlayersResponse>(leagueId, `season-${season.year}.json`)?.payload;
+        const payload = playersSnapshots.peek(season.year)?.value;
         const player = payload?.players.find((row) => row.id === playerId || row.sourceId === playerId);
         if (!player) continue;
         identity ??= player;
@@ -579,9 +556,9 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
       const failed: string[] = [];
       for (const key of keys.length ? keys : [defaultSeason]) {
         try {
-          const payload = await getPlayersPayload(key, { force: true });
-          if (payload.players.length || payload.meta.standings?.length) refreshed.push(key);
-          else failed.push(key);
+          // A failed load still answers with the old snapshot, so ask whether it was replaced.
+          const { fresh } = await playersSnapshots.revalidate(key, { force: true });
+          (fresh ? refreshed : failed).push(key);
         } catch {
           failed.push(key);
         }
@@ -613,13 +590,13 @@ export function createEsportsdeskAdapter(league: League): LeagueDataAdapter {
         uptimeSeconds: Math.round(process.uptime()),
         warm: warmState,
         cache: {
-          seasonsCached: playersCache.size,
+          seasonsCached: playersSnapshots.snapshots().length,
           profilesCached: 0,
-          seasons: [...playersCache.entries()].map(([year, payload]) => ({
+          seasons: playersSnapshots.snapshots().map(([year, snapshot]) => ({
             year,
-            fetchedAt: payload.meta.fetchedAt,
-            playerCount: payload.players.length,
-            fingerprint: `esd:${leagueId}:${year}`
+            fetchedAt: snapshot.value.meta.fetchedAt,
+            playerCount: snapshot.value.players.length,
+            fingerprint: snapshot.fingerprint
           }))
         }
       };

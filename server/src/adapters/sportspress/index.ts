@@ -9,8 +9,9 @@ import type {
   TeamStanding
 } from "../../domain/types.js";
 import type { League, SportspressSeasonSlice } from "../../leagues/types.js";
-import { listFingerprint, readLeagueCache, writeLeagueCache } from "../../lib/cache.js";
+import { listFingerprint } from "../../lib/cache.js";
 import { parseBoxScore, parseScheduleEvent } from "../../lib/schedule.js";
+import { createSnapshotCache, leagueFilePersistence } from "../../lib/snapshots.js";
 import { parseStandingsTable, standingsTableSlugs } from "../../lib/standings.js";
 import {
   buildPlayer,
@@ -66,10 +67,6 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
   const excludeTeam = compileExclude(sp.excludeTeamNamePatterns);
   const configuredSlices = new Map((sp.seasons ?? []).map((slice) => [slice.key, slice]));
 
-  let seasonsMemory: { fingerprint: string; seasons: SeasonInfo[] } | null = null;
-  const standingsCache = new Map<string, { fingerprint: string; standings: TeamStanding[] }>();
-  const scheduleCache = new Map<string, { fingerprint: string; games: ScheduleGame[] }>();
-  const playersCache = new Map<string, PlayersResponse>();
   const gameBoxCache = new Map<number, GameDetail>();
   const seasonIdBySlug = new Map<string, number>();
   let teamNames = new Map<number, string>();
@@ -81,14 +78,6 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     startedAt: null,
     finishedAt: null
   };
-
-  function readDisk<T>(name: string) {
-    return readLeagueCache<T>(leagueId, name);
-  }
-
-  function writeDisk<T>(name: string, fingerprint: string, payload: T) {
-    writeLeagueCache(leagueId, name, fingerprint, payload);
-  }
 
   async function fetchJson<T>(url: string, timeoutMs = 12000): Promise<T | null> {
     try {
@@ -234,35 +223,20 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     };
   }
 
+  const seasonsSnapshots = createSnapshotCache<SeasonInfo[]>({
+    persist: leagueFilePersistence(leagueId, () => "seasons.json"),
+    usable: (seasons) => seasons.length > 0,
+    async load() {
+      const live = sp.seasonMode === "configured" ? await fetchConfiguredSeasons() : await fetchYearSeasons();
+      return live?.seasons.length ? { value: live.seasons, fingerprint: live.fingerprint } : null;
+    }
+  });
+
   async function getSeasons(opts?: AdapterFetchOpts): Promise<SeasonInfo[]> {
-    if (!opts?.force && (opts?.preferCache || opts?.cacheOnly)) {
-      if (seasonsMemory?.seasons.length) return seasonsMemory.seasons;
-      const disk = readDisk<SeasonInfo[]>("seasons.json");
-      if (disk?.payload?.length) {
-        seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
-        return disk.payload;
-      }
-      if (opts?.cacheOnly) return [];
-    }
-
-    if (!opts?.force && seasonsMemory?.seasons.length) return seasonsMemory.seasons;
-
-    const live =
-      sp.seasonMode === "configured" ? await fetchConfiguredSeasons() : await fetchYearSeasons();
-    if (live?.seasons.length) {
-      seasonsMemory = live;
-      writeDisk("seasons.json", live.fingerprint, live.seasons);
-      return live.seasons;
-    }
-
-    const disk = readDisk<SeasonInfo[]>("seasons.json");
-    if (disk?.payload?.length) {
-      seasonsMemory = { fingerprint: disk.fingerprint, seasons: disk.payload };
-      return disk.payload;
-    }
-    return seasonsMemory?.seasons ?? [
-      { year: defaultSeason, label: `${defaultSeason} Season`, slug: defaultSeason }
-    ];
+    const seasons = await seasonsSnapshots.get("all", opts);
+    if (seasons) return seasons;
+    if (opts?.cacheOnly) return [];
+    return [{ year: defaultSeason, label: `${defaultSeason} Season`, slug: defaultSeason }];
   }
 
   function seasonKey(season?: string) {
@@ -282,37 +256,31 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     return standingsTableSlugs(key, league.source);
   }
 
-  async function getStandings(opts?: AdapterFetchOpts): Promise<TeamStanding[]> {
-    const key = seasonKey(opts?.season);
-    const cached = standingsCache.get(key) ?? (() => {
-      const disk = readDisk<TeamStanding[]>(`standings-${key}.json`);
-      if (!disk?.payload) return null;
-      const entry = { fingerprint: disk.fingerprint, standings: disk.payload };
-      standingsCache.set(key, entry);
-      return entry;
-    })();
-
-    if (!opts?.force && opts?.preferCache && cached) return cached.standings;
-
-    for (const slug of standingsSlugsFor(key)) {
-      const payload = await fetchJson<SpTable[]>(
-        `${origin}/wp-json/sportspress/v2/tables?slug=${encodeURIComponent(slug)}&per_page=1`,
-        15000
-      );
-      const table = payload?.[0];
-      const standings = parseStandingsTable(table?.data).filter(
-        (row) => !isNoiseTeam(row.name, excludeTeam)
-      );
-      if (!standings.length) continue;
-      const fingerprint = listFingerprint([
-        { slug: table?.slug, modified: table?.modified, modified_gmt: table?.modified_gmt }
-      ]);
-      standingsCache.set(key, { fingerprint, standings });
-      writeDisk(`standings-${key}.json`, fingerprint, standings);
-      return standings;
+  const standingsSnapshots = createSnapshotCache<TeamStanding[]>({
+    persist: leagueFilePersistence(leagueId, (key) => `standings-${key}.json`),
+    usable: (standings) => standings.length > 0,
+    async load(key) {
+      for (const slug of standingsSlugsFor(key)) {
+        const payload = await fetchJson<SpTable[]>(
+          `${origin}/wp-json/sportspress/v2/tables?slug=${encodeURIComponent(slug)}&per_page=1`,
+          15000
+        );
+        const table = payload?.[0];
+        const standings = parseStandingsTable(table?.data).filter(
+          (row) => !isNoiseTeam(row.name, excludeTeam)
+        );
+        if (!standings.length) continue;
+        const fingerprint = listFingerprint([
+          { slug: table?.slug, modified: table?.modified, modified_gmt: table?.modified_gmt }
+        ]);
+        return { value: standings, fingerprint };
+      }
+      return null;
     }
+  });
 
-    return cached?.standings ?? [];
+  async function getStandings(opts?: AdapterFetchOpts): Promise<TeamStanding[]> {
+    return (await standingsSnapshots.get(seasonKey(opts?.season), opts)) ?? [];
   }
 
   async function fetchAllSeasonEvents(seasonId: number) {
@@ -341,16 +309,6 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     return `${total}:${rows[0]?.modified_gmt ?? ""}`;
   }
 
-  function readSchedule(key: string) {
-    const memory = scheduleCache.get(key);
-    if (memory) return memory;
-    const disk = readDisk<ScheduleGame[]>(`schedule-${key}.json`);
-    if (!disk?.payload?.length) return null;
-    const entry = { fingerprint: disk.fingerprint, games: disk.payload };
-    scheduleCache.set(key, entry);
-    return entry;
-  }
-
   function filterScheduleToDivision(games: ScheduleGame[], standings: TeamStanding[]) {
     const allowed = new Set(standings.map((row) => row.name.toLowerCase()));
     if (!allowed.size) {
@@ -362,64 +320,45 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     );
   }
 
+  const scheduleSnapshots = createSnapshotCache<ScheduleGame[]>({
+    persist: leagueFilePersistence(leagueId, (key) => `schedule-${key}.json`),
+    usable: (games) => games.length > 0,
+    async load(key, { previous, force }) {
+      const seasonId = await resolveSeasonId(key);
+      if (!seasonId) return null;
+
+      // Taken before the events fetch: if the schedule changes mid-fetch, the snapshot is
+      // labelled older than its data and the next check refetches, rather than the reverse.
+      const liveFingerprint = await fetchScheduleFingerprint(seasonId);
+      if (!force && previous && liveFingerprint && liveFingerprint === previous.fingerprint) {
+        return { value: previous.value, fingerprint: previous.fingerprint };
+      }
+
+      const [events, names, venues, standings] = await Promise.all([
+        fetchAllSeasonEvents(seasonId),
+        loadTeamNameMap(),
+        loadVenueNameMap(),
+        getStandings({ season: key, preferCache: true })
+      ]);
+      const games = filterScheduleToDivision(
+        events
+          .map((event) => parseScheduleEvent(event, names, venues))
+          .filter((game): game is ScheduleGame => Boolean(game))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+        standings
+      );
+      if (!games.length) return null;
+      return { value: games, fingerprint: liveFingerprint ?? `fetched:${new Date().toISOString()}` };
+    }
+  });
+
   async function getSchedule(opts?: AdapterFetchOpts): Promise<ScheduleResponse> {
     const key = seasonKey(opts?.season);
-    const cached = readSchedule(key);
-    if (!opts?.force && opts?.preferCache && cached) {
-      return {
-        season: key,
-        games: cached.games,
-        meta: { fetchedAt: new Date().toISOString(), total: cached.games.length, league: leagueRef }
-      };
-    }
-
-    const seasonId = await resolveSeasonId(key);
-    if (!seasonId) {
-      const games = cached?.games ?? [];
-      return {
-        season: key,
-        games,
-        meta: { fetchedAt: new Date().toISOString(), total: games.length, league: leagueRef }
-      };
-    }
-
-    if (!opts?.force && cached) {
-      const liveFingerprint = await fetchScheduleFingerprint(seasonId);
-      if (liveFingerprint && liveFingerprint === cached.fingerprint) {
-        return {
-          season: key,
-          games: cached.games,
-          meta: { fetchedAt: new Date().toISOString(), total: cached.games.length, league: leagueRef }
-        };
-      }
-    }
-
-    const [events, names, venues, standings] = await Promise.all([
-      fetchAllSeasonEvents(seasonId),
-      loadTeamNameMap(),
-      loadVenueNameMap(),
-      getStandings({ season: key, preferCache: true })
-    ]);
-    const games = filterScheduleToDivision(
-      events
-        .map((event) => parseScheduleEvent(event, names, venues))
-        .filter((game): game is ScheduleGame => Boolean(game))
-        .sort((a, b) => a.date.localeCompare(b.date)),
-      standings
-    );
-
-    if (games.length) {
-      const fingerprint =
-        (await fetchScheduleFingerprint(seasonId)) ?? `fetched:${new Date().toISOString()}`;
-      scheduleCache.set(key, { fingerprint, games });
-      writeDisk(`schedule-${key}.json`, fingerprint, games);
-    }
-
-    const payload = games.length ? games : cached?.games ?? [];
+    const games = (await scheduleSnapshots.get(key, opts)) ?? [];
     return {
       season: key,
-      games: payload,
-      meta: { fetchedAt: new Date().toISOString(), total: payload.length, league: leagueRef }
+      games,
+      meta: { fetchedAt: new Date().toISOString(), total: games.length, league: leagueRef }
     };
   }
 
@@ -480,25 +419,60 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     return players;
   }
 
+  function playersPayload(
+    key: string,
+    players: Player[],
+    standings: TeamStanding[],
+    seasonLabel: string
+  ): PlayersResponse {
+    return {
+      players,
+      meta: {
+        source: "sportspress",
+        fetchedAt: new Date().toISOString(),
+        total: players.length,
+        teams: uniqueTeamAliases(
+          standings.map((row) => row.name),
+          league.source.franchiseTeamNames
+        ),
+        season: key,
+        seasonLabel,
+        standings,
+        league: leagueRef
+      }
+    };
+  }
+
+  const playersSnapshots = createSnapshotCache<PlayersResponse>({
+    persist: leagueFilePersistence(leagueId, (key) => `season-${key}.json`),
+    // Bush publishes no player stats (playerSource "none"), so a standings-only board is complete.
+    usable: (payload) => payload.players.length > 0 || (payload.meta.standings?.length ?? 0) > 0,
+    async load(key) {
+      const payload = await fetchPlayersPayload(key);
+      if (!payload) return null;
+      return { value: payload, fingerprint: `players:${key}:${payload.players.length}:${payload.meta.standings?.length ?? 0}` };
+    }
+  });
+
   async function getPlayers(opts?: AdapterFetchOpts): Promise<PlayersResponse> {
     const key = seasonKey(opts?.season);
-    if (!opts?.force && (opts?.preferCache || opts?.cacheOnly)) {
-      const memory = playersCache.get(key);
-      if (memory) return memory;
-      const disk = readDisk<PlayersResponse>(`season-${key}.json`);
-      if (disk?.payload) {
-        playersCache.set(key, disk.payload);
-        return disk.payload;
-      }
-      if (opts?.cacheOnly) throw new Error("Season cache miss");
-    }
+    const payload = await playersSnapshots.get(key, opts);
+    if (payload) return payload;
+    if (opts?.cacheOnly) throw new Error("Season cache miss");
+    return playersPayload(key, [], [], sliceFor(key)?.label ?? `${key} Season`);
+  }
 
+  /** Null when upstream returned nothing new, so the previous board keeps its honest timestamp. */
+  async function fetchPlayersPayload(key: string): Promise<PlayersResponse | null> {
     const slice = sliceFor(key);
-    const [standings, names, seasonId] = await Promise.all([
-      getStandings(opts),
+    // Standings ride inside the players payload, so rebuilding it re-reads them too —
+    // otherwise a board could lag its own table by a full revalidation window.
+    const [table, names, seasonId] = await Promise.all([
+      standingsSnapshots.revalidate(key),
       loadTeamNameMap(),
       resolveSeasonId(key)
     ]);
+    const standings = table.value ?? [];
 
     let players: Player[] = [];
     if (sp.playerSource === "lists") {
@@ -507,33 +481,14 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
     } else if (sp.playerSource === "players") {
       players = await fetchPlayersFromEndpoint(seasonId, names);
     }
+    if (!players.length && !table.fresh) return null;
 
     const seasonLabel =
       slice?.label ??
       (await getSeasons({ preferCache: true })).find((season) => season.year === key)?.label ??
       `${key} Season`;
 
-    const teams = uniqueTeamAliases(
-      standings.map((row) => row.name),
-      league.source.franchiseTeamNames
-    );
-
-    const payload: PlayersResponse = {
-      players,
-      meta: {
-        source: "sportspress",
-        fetchedAt: new Date().toISOString(),
-        total: players.length,
-        teams,
-        season: key,
-        seasonLabel,
-        standings,
-        league: leagueRef
-      }
-    };
-    playersCache.set(key, payload);
-    writeDisk(`season-${key}.json`, `players:${key}:${players.length}:${standings.length}`, payload);
-    return payload;
+    return playersPayload(key, players, standings, seasonLabel);
   }
 
   const adapter: LeagueDataAdapter = {
@@ -560,7 +515,7 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
 
       const playerNames = new Map<number, string>();
       const key = seasonKey(opts?.season);
-      const seasonPlayers = (playersCache.get(key) ?? (await getPlayers({ season: key, preferCache: true }))).players;
+      const seasonPlayers = (await getPlayers({ season: key, preferCache: true })).players;
       for (const player of seasonPlayers) {
         const sourceId = Number(player.sourceId);
         if (Number.isFinite(sourceId) && player.name) playerNames.set(sourceId, player.name);
@@ -591,7 +546,8 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
         sides: parseBoxScore(event.performance, game.teams, playerNames, league.source),
         meta: { fetchedAt: new Date().toISOString(), league: leagueRef }
       };
-      gameBoxCache.set(id, detail);
+      // An unplayed game's box score is still going to change; only a final one is settled.
+      if (game.status === "final") gameBoxCache.set(id, detail);
       return detail;
     },
     async getPlayerProfile() {
@@ -608,9 +564,10 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
       const failed: string[] = [];
       for (const year of years) {
         try {
-          await getPlayers({ season: year, force: true });
+          // A failed scrape still leaves the old snapshot readable, so ask whether it was replaced.
+          const { fresh } = await playersSnapshots.revalidate(year, { force: true });
           await getSchedule({ season: year, force: true });
-          refreshed.push(year);
+          (fresh ? refreshed : failed).push(year);
         } catch {
           failed.push(year);
         }
@@ -651,13 +608,13 @@ export function createSportspressAdapter(league: League): LeagueDataAdapter {
         uptimeSeconds: Math.round(process.uptime()),
         warm: warmState,
         cache: {
-          seasonsCached: playersCache.size || standingsCache.size,
+          seasonsCached: playersSnapshots.snapshots().length || standingsSnapshots.snapshots().length,
           profilesCached: 0,
-          seasons: [...playersCache.entries()].map(([year, payload]) => ({
+          seasons: playersSnapshots.snapshots().map(([year, snapshot]) => ({
             year,
-            fetchedAt: payload.meta.fetchedAt,
-            playerCount: payload.players.length,
-            fingerprint: `${leagueId}:${year}`
+            fetchedAt: snapshot.value.meta.fetchedAt,
+            playerCount: snapshot.value.players.length,
+            fingerprint: snapshot.fingerprint
           }))
         }
       };
