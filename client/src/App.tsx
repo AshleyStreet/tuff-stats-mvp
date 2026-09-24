@@ -47,7 +47,7 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState<ScheduleGame | null>(null);
   const [loading, setLoading] = useState(() => {
     const boot = peekSeasonPlayers(bootSeasons?.defaultSeason ?? league.publicSeason);
-    return !boot?.meta.standings?.length || !playersCacheReady(boot);
+    return !boot || !playersCacheReady(boot);
   });
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +143,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const cached = peekSeasonPlayers(season);
-    if (cached?.meta.standings?.length && playersCacheReady(cached)) {
+    if (cached && playersCacheReady(cached)) {
       setData(cached);
       setLoading(false);
       setError(null);

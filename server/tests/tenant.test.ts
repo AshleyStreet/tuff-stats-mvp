@@ -9,6 +9,23 @@ import { passionLeague } from "../src/leagues/passion.js";
 import { tuffLeague } from "../src/leagues/tuff.js";
 import { getPublicLeague, reloadTenants, resolveRequestLeague } from "../src/leagues/registry.js";
 
+/**
+ * Tests that scrape a real league site. They're slow and fail whenever that
+ * site does, so the default run skips them; `npm run test:live` (or
+ * LIVE_TESTS=1) runs them. npm names the running script in
+ * npm_lifecycle_event, which keeps test:live free of shell-specific env syntax.
+ */
+const LIVE = process.env.LIVE_TESTS === "1" || process.env.npm_lifecycle_event === "test:live";
+const liveIt = LIVE ? it : it.skip;
+
+/**
+ * A failed scrape still answers with the last snapshot on disk, so a live test
+ * must check the data was built during the test — otherwise it passes on cache.
+ */
+function expectFetchedSince(startedAt: number, fetchedAt: string) {
+  expect(Date.parse(fetchedAt)).toBeGreaterThanOrEqual(startedAt);
+}
+
 function withTempTenants() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tuff-tenants-"));
   const previous = process.env.TENANTS_DIR;
@@ -146,9 +163,11 @@ describe("Bush League sportspress adapter", () => {
     expect(pub.name).not.toContain("Toronto United");
   });
 
-  it("ingests live standings, teams, and schedule from bushleaguetoronto.ca", async () => {
+  liveIt("ingests live standings, teams, and schedule from bushleaguetoronto.ca", async () => {
     const adapter = getAdapter(bushLeague);
+    const startedAt = Date.now();
     const players = await adapter.getPlayers({ season: "2026", force: true });
+    expectFetchedSince(startedAt, players.meta.fetchedAt);
     expect(players.meta.league?.slug).toBe("bush");
     expect(players.meta.source).toBe("sportspress");
     expect(players.players.map((player) => player.name)).not.toContain("Colin H.");
@@ -165,14 +184,17 @@ describe("Bush League sportspress adapter", () => {
     expect(schedule.games.some((game) => game.title.includes("Diamond Dogs"))).toBe(true);
   }, 45000);
 
-  it("writes Bush cache without touching TUFF cache files", async () => {
+  liveIt("writes Bush cache without touching TUFF cache files", async () => {
     const tuffFile = path.join(CACHE_DIR, "tuff", "season-2026.json");
     const bushFile = path.join(CACHE_DIR, "bush", "season-2026.json");
     const before = fs.existsSync(tuffFile) ? fs.statSync(tuffFile).mtimeMs : 0;
 
+    const startedAt = Date.now();
     await getAdapter(bushLeague).refresh("2026");
 
     expect(fs.existsSync(bushFile)).toBe(true);
+    // The refresh must have rewritten it, not merely found an older file.
+    expect(fs.statSync(bushFile).mtimeMs).toBeGreaterThanOrEqual(startedAt - 1000);
     const after = fs.existsSync(tuffFile) ? fs.statSync(tuffFile).mtimeMs : 0;
     expect(after).toBe(before);
   }, 45000);
@@ -188,12 +210,14 @@ describe("Passion Soccer sportspress adapter", () => {
     expect(passionLeague.source.sportspress?.seasons?.some((slice) => slice.key === "d2-ete-2026")).toBe(true);
   });
 
-  it("ingests live D2 standings and player goals from passion-soccer.com", async () => {
+  liveIt("ingests live D2 standings and player goals from passion-soccer.com", async () => {
     const adapter = getAdapter(passionLeague);
     const seasons = await adapter.getSeasons({ force: true });
     expect(seasons.map((season) => season.year)).toEqual(expect.arrayContaining(["d2-ete-2026", "d4-ete-2026"]));
 
+    const startedAt = Date.now();
     const players = await adapter.getPlayers({ season: "d2-ete-2026", force: true });
+    expectFetchedSince(startedAt, players.meta.fetchedAt);
     expect(players.meta.league?.slug).toBe("passion");
     expect(players.meta.source).toBe("sportspress");
     expect(players.meta.seasonLabel).toContain("D2");

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { toLeagueRef } from "../../domain/types.js";
 import type {
   GameDetail,
@@ -14,19 +15,29 @@ import type { League } from "../../leagues/types.js";
 import { readLeagueCache, writeLeagueCache } from "../../lib/cache.js";
 import { parseCsv } from "../../lib/csv.js";
 import { careerFromSeasons } from "../../lib/profile.js";
+import { createSnapshotCache, type SnapshotPersistence } from "../../lib/snapshots.js";
 import { buildPlayer, statsFromRow, toNumber, uniqueTeamAliases } from "../../lib/stats.js";
-import type { AdapterStatus, AdapterWarmState, LeagueDataAdapter } from "../types.js";
+import type { AdapterFetchOpts, AdapterStatus, AdapterWarmState, LeagueDataAdapter } from "../types.js";
 
 type CsvRow = Record<string, string>;
 
-async function fetchCsv(url: string, userAgent: string, timeoutMs = 15000): Promise<CsvRow[] | null> {
+/** Everything a CSV tenant publishes, keyed by season. The sheets load together. */
+type CsvData = {
+  players: Map<string, Player[]>;
+  standings: Map<string, TeamStanding[]>;
+  schedule: Map<string, ScheduleGame[]>;
+};
+
+const EMPTY_DATA: CsvData = { players: new Map(), standings: new Map(), schedule: new Map() };
+
+async function fetchText(url: string, userAgent: string, timeoutMs = 15000): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: { "User-Agent": userAgent, Accept: "text/csv, text/plain, */*" },
       signal: AbortSignal.timeout(timeoutMs)
     });
     if (!response.ok) return null;
-    return parseCsv(await response.text());
+    return await response.text();
   } catch {
     return null;
   }
@@ -128,11 +139,6 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
   const defaultSeason = league.publicSeason;
   const leagueId = league.id;
 
-  const playersBySeason = new Map<string, Player[]>();
-  const standingsBySeason = new Map<string, TeamStanding[]>();
-  const scheduleBySeason = new Map<string, ScheduleGame[]>();
-  let seasons: SeasonInfo[] = [];
-  let loaded = false;
   let warmState: AdapterWarmState = {
     status: "idle",
     warmed: [],
@@ -141,65 +147,23 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
     finishedAt: null
   };
 
-  function readDisk<T>(name: string) {
-    return readLeagueCache<T>(leagueId, name);
-  }
-  function writeDisk<T>(name: string, fingerprint: string, payload: T) {
-    writeLeagueCache(leagueId, name, fingerprint, payload);
-  }
-
   function seasonYear(season?: string) {
     return season?.trim() || defaultSeason;
   }
 
-  function recomputeSeasons() {
-    const years = new Set([...playersBySeason.keys(), ...standingsBySeason.keys(), ...scheduleBySeason.keys()]);
-    seasons = years.size
+  function seasonsOf(data: CsvData): SeasonInfo[] {
+    const years = new Set([...data.players.keys(), ...data.standings.keys(), ...data.schedule.keys()]);
+    return years.size
       ? [...years].sort((a, b) => Number(b) - Number(a)).map((year) => ({ year, label: `${year} Season`, slug: year }))
       : [{ year: defaultSeason, label: `${defaultSeason} Season`, slug: defaultSeason }];
   }
 
-  function hydratePlayersFromDisk() {
-    const disk = readDisk<Array<[string, Player[]]>>("players.json");
-    if (!disk?.payload) return;
-    playersBySeason.clear();
-    for (const [year, players] of disk.payload) playersBySeason.set(year, players);
-  }
-  function hydrateStandingsFromDisk() {
-    const disk = readDisk<Array<[string, TeamStanding[]]>>("standings.json");
-    if (!disk?.payload) return;
-    standingsBySeason.clear();
-    for (const [year, standings] of disk.payload) standingsBySeason.set(year, standings);
-  }
-  function hydrateScheduleFromDisk() {
-    const disk = readDisk<Array<[string, ScheduleGame[]]>>("schedule.json");
-    if (!disk?.payload) return;
-    scheduleBySeason.clear();
-    for (const [year, games] of disk.payload) scheduleBySeason.set(year, games);
-  }
-
-  async function loadAll(opts: { force?: boolean; cacheOnly?: boolean } = {}) {
-    if (loaded && !opts.force) return;
-
-    if (opts.cacheOnly || !csv?.playersUrl) {
-      hydratePlayersFromDisk();
-      hydrateStandingsFromDisk();
-      hydrateScheduleFromDisk();
-      recomputeSeasons();
-      loaded = true;
-      return;
-    }
-
-    const [playerRows, standingsRows, scheduleRows] = await Promise.all([
-      fetchCsv(csv.playersUrl, userAgent),
-      csv.standingsUrl ? fetchCsv(csv.standingsUrl, userAgent) : Promise.resolve(null),
-      csv.scheduleUrl ? fetchCsv(csv.scheduleUrl, userAgent) : Promise.resolve(null)
-    ]);
-
-    if (playerRows) {
-      playersBySeason.clear();
-      for (const [year, rows] of groupBySeason(playerRows, defaultSeason)) {
-        const players = rows
+  function playersBySeason(rows: CsvRow[]) {
+    const bySeason = new Map<string, Player[]>();
+    for (const [year, seasonRows] of groupBySeason(rows, defaultSeason)) {
+      bySeason.set(
+        year,
+        seasonRows
           .filter((row) => row.name?.trim())
           .map((row) =>
             buildPlayer(row.name.trim(), statsFromRow(row, league.source), {
@@ -207,41 +171,92 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
               sourceId: row.sourceid?.trim() || undefined,
               profileUrl: row.profileurl?.trim() || undefined
             })
-          );
-        playersBySeason.set(year, players);
-      }
-      writeDisk("players.json", `csv:${playerRows.length}`, [...playersBySeason.entries()]);
-    } else {
-      hydratePlayersFromDisk();
+          )
+      );
     }
-
-    if (standingsRows) {
-      standingsBySeason.clear();
-      for (const [year, rows] of groupBySeason(standingsRows, defaultSeason)) {
-        standingsBySeason.set(year, standingsFromRows(rows));
-      }
-      writeDisk("standings.json", `csv:${standingsRows.length}`, [...standingsBySeason.entries()]);
-    } else if (csv.standingsUrl) {
-      hydrateStandingsFromDisk();
-    }
-
-    if (scheduleRows) {
-      scheduleBySeason.clear();
-      for (const [year, rows] of groupBySeason(scheduleRows, defaultSeason)) {
-        scheduleBySeason.set(year, scheduleFromRows(rows));
-      }
-      writeDisk("schedule.json", `csv:${scheduleRows.length}`, [...scheduleBySeason.entries()]);
-    } else if (csv.scheduleUrl) {
-      hydrateScheduleFromDisk();
-    }
-
-    recomputeSeasons();
-    loaded = true;
+    return bySeason;
   }
 
-  function playersPayload(year: string): PlayersResponse {
-    const players = playersBySeason.get(year) ?? [];
-    const standings = standingsBySeason.get(year) ?? [];
+  function mapSeasons<T>(rows: CsvRow[], build: (rows: CsvRow[]) => T) {
+    return new Map([...groupBySeason(rows, defaultSeason)].map(([year, seasonRows]) => [year, build(seasonRows)]));
+  }
+
+  /** Three files, in the shape earlier versions wrote, so existing snapshots still load. */
+  const persist: SnapshotPersistence<CsvData> = {
+    read() {
+      const players = readLeagueCache<Array<[string, Player[]]>>(leagueId, "players.json");
+      const standings = readLeagueCache<Array<[string, TeamStanding[]]>>(leagueId, "standings.json");
+      const schedule = readLeagueCache<Array<[string, ScheduleGame[]]>>(leagueId, "schedule.json");
+      const newest = players ?? standings ?? schedule;
+      if (!newest) return null;
+      return {
+        fingerprint: players?.fingerprint ?? "",
+        savedAt: newest.savedAt,
+        payload: {
+          players: new Map(players?.payload ?? []),
+          standings: new Map(standings?.payload ?? []),
+          schedule: new Map(schedule?.payload ?? [])
+        }
+      };
+    },
+    write(_key, fingerprint, data) {
+      writeLeagueCache(leagueId, "players.json", fingerprint, [...data.players]);
+      writeLeagueCache(leagueId, "standings.json", fingerprint, [...data.standings]);
+      writeLeagueCache(leagueId, "schedule.json", fingerprint, [...data.schedule]);
+    }
+  };
+
+  const snapshots = createSnapshotCache<CsvData>({
+    persist,
+    usable: (data) => data.players.size > 0 || data.standings.size > 0 || data.schedule.size > 0,
+    async load(_key, { previous, force }) {
+      // No players sheet means nothing to fetch — keep whatever snapshot is on disk.
+      if (!csv?.playersUrl) return null;
+
+      const [playersText, standingsText, scheduleText] = await Promise.all([
+        fetchText(csv.playersUrl, userAgent),
+        csv.standingsUrl ? fetchText(csv.standingsUrl, userAgent) : Promise.resolve(null),
+        csv.scheduleUrl ? fetchText(csv.scheduleUrl, userAgent) : Promise.resolve(null)
+      ]);
+      if (playersText == null && standingsText == null && scheduleText == null) return null;
+
+      // Sheets carry no modified stamp, so the content itself is the fingerprint.
+      const fingerprint = `csv:${createHash("sha1")
+        .update([playersText, standingsText, scheduleText].map((text) => text ?? "-").join("\0"))
+        .digest("hex")}`;
+      if (!force && previous?.fingerprint === fingerprint) return { value: previous.value, fingerprint };
+
+      // A sheet that failed to download keeps its last good rows; a sheet that
+      // is no longer configured is dropped.
+      const kept = previous?.value;
+      return {
+        fingerprint,
+        value: {
+          players: playersText != null ? playersBySeason(parseCsv(playersText)) : (kept?.players ?? new Map()),
+          standings:
+            standingsText != null
+              ? mapSeasons(parseCsv(standingsText), standingsFromRows)
+              : csv.standingsUrl
+                ? (kept?.standings ?? new Map())
+                : new Map(),
+          schedule:
+            scheduleText != null
+              ? mapSeasons(parseCsv(scheduleText), scheduleFromRows)
+              : csv.scheduleUrl
+                ? (kept?.schedule ?? new Map())
+                : new Map()
+        }
+      };
+    }
+  });
+
+  async function loadData(opts?: AdapterFetchOpts): Promise<CsvData> {
+    return (await snapshots.get("all", opts)) ?? EMPTY_DATA;
+  }
+
+  function playersPayload(data: CsvData, year: string): PlayersResponse {
+    const players = data.players.get(year) ?? [];
+    const standings = data.standings.get(year) ?? [];
     const teams = uniqueTeamAliases(
       standings.map((row) => row.name),
       league.source.franchiseTeamNames
@@ -254,15 +269,15 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
         total: players.length,
         teams,
         season: year,
-        seasonLabel: seasons.find((item) => item.year === year)?.label ?? `${year} Season`,
+        seasonLabel: seasonsOf(data).find((item) => item.year === year)?.label ?? `${year} Season`,
         standings,
         league: leagueRef
       }
     };
   }
 
-  function schedulePayload(year: string): ScheduleResponse {
-    const games = scheduleBySeason.get(year) ?? [];
+  function schedulePayload(data: CsvData, year: string): ScheduleResponse {
+    const games = data.schedule.get(year) ?? [];
     return {
       season: year,
       games,
@@ -273,25 +288,21 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
   const adapter: LeagueDataAdapter = {
     leagueId,
     async getSeasons(opts) {
-      await loadAll({ force: opts?.force, cacheOnly: opts?.cacheOnly });
-      return seasons;
+      return seasonsOf(await loadData(opts));
     },
     async getPlayers(opts) {
-      await loadAll({ force: opts?.force, cacheOnly: opts?.cacheOnly });
-      return playersPayload(seasonYear(opts?.season));
+      return playersPayload(await loadData(opts), seasonYear(opts?.season));
     },
     async getStandings(opts) {
-      await loadAll({ force: opts?.force, cacheOnly: opts?.cacheOnly });
-      return standingsBySeason.get(seasonYear(opts?.season)) ?? [];
+      return (await loadData(opts)).standings.get(seasonYear(opts?.season)) ?? [];
     },
     async getSchedule(opts) {
-      await loadAll({ force: opts?.force, cacheOnly: opts?.cacheOnly });
-      return schedulePayload(seasonYear(opts?.season));
+      return schedulePayload(await loadData(opts), seasonYear(opts?.season));
     },
     async getGame(eventId, opts) {
-      await loadAll();
+      const data = await loadData();
       const year = seasonYear(opts?.season);
-      const game = (scheduleBySeason.get(year) ?? []).find((item) => String(item.id) === String(eventId));
+      const game = (data.schedule.get(year) ?? []).find((item) => String(item.id) === String(eventId));
       if (!game) return null;
       const detail: GameDetail = {
         game,
@@ -301,10 +312,10 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
       return detail;
     },
     async getPlayerProfile(playerId) {
-      await loadAll();
+      const data = await loadData();
       const matchedSeasons: PlayerSeason[] = [];
       let identity: Player | undefined;
-      for (const [year, players] of playersBySeason) {
+      for (const [year, players] of data.players) {
         const player = players.find((row) => row.id === playerId || row.sourceId === playerId);
         if (!player) continue;
         identity ??= player;
@@ -340,8 +351,8 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
       return null;
     },
     async refresh(season) {
-      await loadAll({ force: true });
-      const years = season ? [seasonYear(season)] : seasons.map((item) => item.year);
+      const data = await loadData({ force: true });
+      const years = season ? [seasonYear(season)] : seasonsOf(data).map((item) => item.year);
       return { refreshed: years, failed: [] };
     },
     async warm() {
@@ -353,8 +364,7 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
         finishedAt: null
       };
       try {
-        await loadAll({ force: true });
-        const warmed = seasons.map((item) => item.year);
+        const warmed = seasonsOf(await loadData({ force: true })).map((item) => item.year);
         warmState = { status: "done", warmed, failed: [], startedAt: warmState.startedAt, finishedAt: new Date().toISOString() };
         return { warmed, failed: [] };
       } catch {
@@ -369,19 +379,21 @@ export function createCsvAdapter(league: League): LeagueDataAdapter {
       }
     },
     status(): AdapterStatus {
+      const snapshot = snapshots.peek("all");
+      const players = [...(snapshot?.value.players ?? [])];
       return {
         ok: true,
         service: league.serviceName,
         uptimeSeconds: Math.round(process.uptime()),
         warm: warmState,
         cache: {
-          seasonsCached: playersBySeason.size,
+          seasonsCached: players.length,
           profilesCached: 0,
-          seasons: [...playersBySeason.entries()].map(([year, players]) => ({
+          seasons: players.map(([year, seasonPlayers]) => ({
             year,
-            fetchedAt: new Date().toISOString(),
-            playerCount: players.length,
-            fingerprint: `csv:${leagueId}:${year}`
+            fetchedAt: new Date(snapshot?.at ?? Date.now()).toISOString(),
+            playerCount: seasonPlayers.length,
+            fingerprint: snapshot?.fingerprint ?? ""
           }))
         }
       };

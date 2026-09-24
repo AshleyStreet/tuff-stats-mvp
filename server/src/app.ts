@@ -42,6 +42,7 @@ import {
   requestOrigin
 } from "./lib/pageSeo.js";
 import { buildSitemapUrls, resolveLeaguePageSeo } from "./lib/resolvePageSeo.js";
+import { injectHeadTags, readViteManifest, screenForRoute, screenPreloadTags } from "./lib/screenPreload.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -510,31 +511,30 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
       })
     );
 
-    async function sendSpa(req: express.Request, res: express.Response) {
-      const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
+    const manifest = readViteManifest(clientDist);
+
+    async function renderSpa(req: express.Request, host: string) {
       const origin = requestOrigin(req);
       const queryIndex = req.originalUrl.indexOf("?");
       const search = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
-      if (isMarketingHost(host)) {
-        return res.type("html").send(injectPageSeo(indexTemplate, marketingSeo(origin)));
-      }
+      if (isMarketingHost(host)) return injectPageSeo(indexTemplate, marketingSeo(origin));
 
+      const { league, adapter } = tenant(req);
       try {
-        const { league, adapter } = tenant(req);
-        const html = await buildBootstrappedHtml(indexTemplate, league, adapter, origin, req.path, search);
-        return res.type("html").send(html);
+        return await buildBootstrappedHtml(indexTemplate, league, adapter, origin, req.path, search);
       } catch {
-        const { league, adapter } = tenant(req);
         try {
-          const seo = await resolveLeaguePageSeo(league, adapter, origin, req.path, search);
-          return res.type("html").send(injectPageSeo(indexTemplate, seo));
+          return injectPageSeo(indexTemplate, await resolveLeaguePageSeo(league, adapter, origin, req.path, search));
         } catch {
-          const { league } = tenant(req);
-          return res
-            .type("html")
-            .send(injectPageSeo(indexTemplate, leagueSeo(toPublicLeague(league), origin, league.publicSeason)));
+          return injectPageSeo(indexTemplate, leagueSeo(toPublicLeague(league), origin, league.publicSeason));
         }
       }
+    }
+
+    async function sendSpa(req: express.Request, res: express.Response) {
+      const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0]?.trim() ?? "";
+      const preload = screenPreloadTags(manifest, screenForRoute(req.path, isMarketingHost(host)));
+      return res.type("html").send(injectHeadTags(await renderSpa(req, host), preload));
     }
 
     app.get("/", (req, res) => {
@@ -592,7 +592,8 @@ async function loadBootstrapPayload(league: League, adapter: LeagueDataAdapter):
 
   try {
     const players = await adapter.getPlayers({ season: defaultSeason, cacheOnly: true });
-    if (!players.players.length) return null;
+    // A standings-only board (a league that publishes no player stats) is still a board.
+    if (!players.players.length && !players.meta.standings?.length) return null;
     return {
       league: toPublicLeague(league),
       seasons: { seasons, defaultSeason },

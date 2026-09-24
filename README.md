@@ -47,7 +47,7 @@ Each tenant's disk and in-memory caches are keyed by tenant id, so one tenant's 
 
 Adapters attempt each source's REST API first. If that's unavailable or doesn't expose usable rows, the `tuff` adapter falls back to parsing the public stats HTML table. The React app only consumes Afterwhistle's normalized API, so an upstream site's implementation can change without infecting the UI.
 
-Heavy season payloads are cached under `server/.cache/<tenant>/` and reused until a lightweight change-detection check (e.g. SportsPress `_fields` / `modified_gmt`) shows the source data changed. If a source is temporarily down, the last good snapshot is served. Force re-fetch requires admin credentials (see [Admin tokens](#admin-tokens) below).
+Heavy season payloads are cached under `server/.cache/<tenant>/` and reused until a lightweight change-detection check (e.g. SportsPress `_fields` / `modified_gmt`) shows the source data changed. That check runs at most once per `CACHE_TTL_MS` (default 5 minutes); visitors are answered from the snapshot while it runs, so only a tenant with no snapshot at all waits on its source. If a source is temporarily down, the last good snapshot is served. Force re-fetch requires admin credentials (see [Admin tokens](#admin-tokens) below).
 
 On startup the API warms every season into that cache in the background for the default tenant. Player career profiles then read those warm snapshots directly (no per-season revalidation chatter).
 
@@ -67,6 +67,20 @@ Then open:
 - API: http://localhost:4000/api/players
 - Health: http://localhost:4000/api/health
 
+## Tests
+
+```bash
+npm test
+```
+
+Runs offline in a few seconds. CI runs the same suite, plus both type-checks and a client build, on every pull request and before each image build.
+
+A few tests scrape real league websites (Bush League, Passion Soccer) to catch upstream changes. They're skipped by default because they fail whenever those sites are down; run them on purpose with:
+
+```bash
+npm run test:live
+```
+
 ## Environment variables
 
 Copy `server/.env.example` to `server/.env` if you want to override defaults.
@@ -78,6 +92,8 @@ TUFF_STATS_URL=https://www.playtuff.ca/list/2026-tuff-stats/
 ADMIN_TOKEN=
 # Optional. Per-tenant refresh token — see "Admin tokens" below.
 # ADMIN_TOKEN_TUFF=
+# Optional. How often (ms) a cached snapshot is re-checked against its source. Default 300000.
+# CACHE_TTL_MS=300000
 ```
 
 ## Admin tokens

@@ -1,0 +1,42 @@
+name: CI
+
+# Type-checks both packages, builds the client, and runs the server tests.
+# Runs on pull requests, and "Build image" calls it first, so a push to main
+# that breaks the build or the tests never becomes the :latest image.
+#
+# The live-site tests (npm run test:live) are deliberately left out: they scrape
+# real league websites, and one of those being down must not block a deploy.
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install
+        run: npm ci --prefix server && npm ci --prefix client
+
+      - name: Type-check server
+        run: npm run typecheck --prefix server
+
+      # tsc -b && vite build: type-checks the client and proves it bundles.
+      - name: Build client
+        run: npm run build --prefix client
+
+      - name: Server tests
+        run: npm test --prefix server
