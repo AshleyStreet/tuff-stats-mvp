@@ -1,10 +1,14 @@
-const MAX_EDGE = 720;
+// Large enough that a zoomed-in crop still looks sharp on the 750px export,
+// small enough that a team's worth of photos fits in sessionStorage.
+const MAX_EDGE = 1200;
 const JPEG_QUALITY = 0.82;
-const MAX_BYTES = 15 * 1024 * 1024;
+// Photos are shrunk to MAX_EDGE in the browser before use, so this only
+// guards against absurd files; full-resolution camera JPEGs and PNG exports fit.
+const MAX_BYTES = 200 * 1024 * 1024;
 
 export function readCardPhoto(file: File): Promise<string> {
   if (file.size > MAX_BYTES) {
-    return Promise.reject(new Error("That photo is too large. Try one under 15 MB."));
+    return Promise.reject(new Error("That photo is too large. Try one under 200 MB."));
   }
   const type = file.type.toLowerCase();
   if (type && !type.startsWith("image/")) {
@@ -43,6 +47,8 @@ function drawCardPhoto(img: HTMLImageElement): string {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Couldn't process that photo.");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#111";
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(img, 0, 0, width, height);

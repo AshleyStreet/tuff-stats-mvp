@@ -12,14 +12,19 @@ export type CardStatLine = {
 export type PhotoPosition = {
   x: number;
   y: number;
+  /** 1 = photo just covers the frame; higher crops in around (x, y). */
+  zoom?: number;
 };
+
+export const MIN_PHOTO_ZOOM = 1;
+export const MAX_PHOTO_ZOOM = 3;
 
 export type CardTheme = {
   background?: string;
   border?: string;
 };
 
-export const DEFAULT_PHOTO_POSITION: PhotoPosition = { x: 50, y: 15 };
+export const DEFAULT_PHOTO_POSITION: PhotoPosition = { x: 50, y: 15, zoom: 1 };
 
 /** Keep accent labels readable on the dark stat bar when team colors are dim. */
 export function readableCardAccent(color: string): string {

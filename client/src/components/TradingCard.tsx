@@ -55,7 +55,12 @@ export function TradingCard({ card, selected, onSelect }: Props) {
               className="tc-photo"
               src={card.photoUrl}
               alt=""
-              style={{ objectPosition: `${position.x}% ${position.y}%` }}
+              style={{
+                objectPosition: `${position.x}% ${position.y}%`,
+                ...(position.zoom && position.zoom > 1
+                  ? { transform: `scale(${position.zoom})`, transformOrigin: `${position.x}% ${position.y}%` }
+                  : {})
+              }}
             />
           ) : (
             <div className="tc-hero-fallback" aria-hidden="true">

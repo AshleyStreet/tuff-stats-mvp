@@ -1631,6 +1631,27 @@ div.tc-hero-logo {
   text-align: center;
   pointer-events: none;
 }
+.captain-photo-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 220px;
+  margin: 0 0 6px;
+  color: #aaa;
+  font: 700 11px "Barlow Condensed";
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.captain-photo-zoom input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--gold);
+}
+.captain-photo-zoom output {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .text-action.is-active {
   color: var(--gold);
 }
