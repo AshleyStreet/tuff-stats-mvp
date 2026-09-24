@@ -93,6 +93,20 @@ export function normalizeJersey(value: string): string {
   return value.replace(/\D/g, "").slice(0, 3);
 }
 
+/** The server's same-origin copy of a team's logo; exports need it because league sites block CORS. */
+export function teamLogoProxyUrl(team: string, season?: string) {
+  const params = new URLSearchParams({ team });
+  if (season) params.set("season", season);
+  return `/api/team-logo?${params}`;
+}
+
+export const MAX_CARD_NAME_LENGTH = 32;
+
+/** Collapse stray whitespace; an empty result means "use the roster name". */
+export function normalizeCardName(value: string): string {
+  return value.replace(/\s+/g, " ").trimStart().slice(0, MAX_CARD_NAME_LENGTH);
+}
+
 export const CARDS_PER_PAGE = 9;
 
 export function splitPlayerName(name: string) {

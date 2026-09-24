@@ -31,6 +31,7 @@ import {
 import { getLeagueByHostname, getLeagueBySlug, resolveRequestLeague, toPublicLeague } from "./leagues/registry.js";
 import type { League } from "./leagues/types.js";
 import { filterAndSortPlayers } from "./lib/query.js";
+import { createLogoProxy, LogoProxyError } from "./lib/logoProxy.js";
 import { isMarketingHost } from "./lib/marketingHosts.js";
 import { injectPageBootstrap, type PageBootstrap } from "./lib/pageBootstrap.js";
 import {
@@ -42,6 +43,7 @@ import {
   requestOrigin
 } from "./lib/pageSeo.js";
 import { buildSitemapUrls, resolveLeaguePageSeo } from "./lib/resolvePageSeo.js";
+import { canonicalTeamName } from "./lib/stats.js";
 import { injectHeadTags, readViteManifest, screenForRoute, screenPreloadTags } from "./lib/screenPreload.js";
 import type { LeagueDataAdapter } from "./adapters/types.js";
 
@@ -53,8 +55,11 @@ function tokensMatch(provided: string, expected: string) {
   return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
 }
 
-export function createApp(options: { adminToken?: string; clientDist?: string } = {}) {
+export function createApp(
+  options: { adminToken?: string; clientDist?: string; logoFetch?: typeof fetch } = {}
+) {
   const adminToken = (options.adminToken ?? process.env.ADMIN_TOKEN ?? "").trim();
+  const logoProxy = createLogoProxy({ fetchImpl: options.logoFetch });
   const clientDist = options.clientDist ?? path.resolve(__dirname, "../../client/dist");
   const app = express();
 
@@ -461,6 +466,27 @@ export function createApp(options: { adminToken?: string; clientDist?: string } 
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(502).json({ error: "Unable to load leaders", detail: message });
+    }
+  });
+
+  /** A team's logo served same-origin, so card exports can draw it (league sites don't send CORS). */
+  app.get("/api/team-logo", async (req, res) => {
+    const team = String(req.query.team ?? "").trim();
+    const season = String(req.query.season ?? "").trim();
+    if (!team) return res.status(400).json({ error: "team is required" });
+    try {
+      const data = await tenant(req).adapter.getPlayers({ season: season || undefined });
+      const logos = data.meta.teamLogos ?? {};
+      const url = logos[team] ?? logos[canonicalTeamName(team)];
+      if (!url) return res.status(404).json({ error: "No logo for that team" });
+      const image = await logoProxy.get(url);
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.type(image.contentType).send(image.body);
+    } catch (error) {
+      const status = error instanceof LogoProxyError ? error.status : 502;
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return res.status(status).json({ error: "Unable to load logo", detail: message });
     }
   });
 

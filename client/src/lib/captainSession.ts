@@ -1,4 +1,4 @@
-import { DEFAULT_PHOTO_POSITION, MAX_PHOTO_ZOOM, MIN_PHOTO_ZOOM, normalizeJersey, type PhotoPosition } from "./cards";
+import { DEFAULT_PHOTO_POSITION, MAX_PHOTO_ZOOM, MIN_PHOTO_ZOOM, normalizeCardName, normalizeJersey, type PhotoPosition } from "./cards";
 import { defaultSlots, type PlayerOverrides, type StatSlot } from "./cardStats";
 import { isCardTemplateId, type CardTemplateId } from "./cardTemplates";
 
@@ -26,6 +26,7 @@ export type CaptainSession = {
   teamFilter: string;
   teamColors: Record<string, TeamCardColors>;
   numbers: Record<string, string>;
+  names: Record<string, string>;
   showTitleLine: boolean;
 };
 
@@ -66,6 +67,16 @@ function normalizeNumberMap(value: unknown): Record<string, string> {
   return next;
 }
 
+function normalizeNameMap(value: unknown): Record<string, string> {
+  if (!isStringMap(value)) return {};
+  const next: Record<string, string> = {};
+  for (const [playerId, raw] of Object.entries(value)) {
+    const name = normalizeCardName(raw).trim();
+    if (name) next[playerId] = name;
+  }
+  return next;
+}
+
 function isTeamColorsMap(value: unknown): value is Record<string, TeamCardColors> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return Object.values(value).every((item) => {
@@ -100,6 +111,7 @@ export function emptyCaptainSession(): CaptainSession {
     teamFilter: "",
     teamColors: {},
     numbers: {},
+    names: {},
     showTitleLine: true
   };
 }
@@ -136,6 +148,7 @@ export function loadCaptainSession(slug = "tuff"): CaptainSession {
       teamFilter: typeof parsed.teamFilter === "string" ? parsed.teamFilter : "",
       teamColors: isTeamColorsMap(parsed.teamColors) ? parsed.teamColors : {},
       numbers: normalizeNumberMap(parsed.numbers),
+      names: normalizeNameMap(parsed.names),
       showTitleLine: parsed.showTitleLine !== false
     };
   } catch {

@@ -1257,6 +1257,8 @@ button.log-row:hover {
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto auto;
+  /* minmax(0, …) so a long nowrap name can't widen the card past its frame. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   padding: 10px 10px 8px;
   background: var(--tc-bg);
@@ -1411,6 +1413,10 @@ div.tc-hero-logo {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* TradingCard sets --tc-name-scale below 1 when a long name would overflow the plate. */
+.tc-name {
+  font-size: calc(clamp(14px, 5.5cqw, 18px) * var(--tc-name-scale, 1));
+}
 
 .tc-note {
   display: block;
@@ -1485,11 +1491,29 @@ div.tc-hero-logo {
 
 @container tcard (max-width: 200px) {
   .tc-num { font-size: 38px; }
-  .tc-name { font-size: 13px; }
+  .tc-name { font-size: calc(13px * var(--tc-name-scale, 1)); }
   .tc-stat strong { font-size: 15px; }
 }
 
 .print-sheet { display: none; }
+
+.card-export-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 250px;
+  pointer-events: none;
+}
+.card-export-stage .trading-card {
+  width: 250px;
+  max-width: none;
+}
+/* Print files are cut square by the shop; drop the on-screen rounding and drop shadow. */
+.tc-print-export .trading-card-face {
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
 
 .captain-hint {
   margin: 8px 0 14px;
@@ -1697,6 +1721,7 @@ div.tc-hero-logo {
 .captain-custom-row input:focus,
 .captain-edit-row input:focus,
 .captain-jersey-input:focus,
+.captain-name-input:focus,
 .captain-note-input:focus {
   border-color: rgba(227, 27, 35, 0.45);
 }
@@ -1723,6 +1748,18 @@ div.tc-hero-logo {
   font: 800 18px/1 "Barlow Condensed", sans-serif;
   letter-spacing: 1px;
   text-align: center;
+}
+.captain-name-input {
+  width: 100%;
+  color: #eee;
+  background: #141516;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 9px 10px;
+  outline: none;
+  font: italic 800 17px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 .captain-slot-actions {
   display: flex;
