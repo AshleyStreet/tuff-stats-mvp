@@ -1,4 +1,4 @@
-import { DEFAULT_PHOTO_POSITION, normalizeJersey, type PhotoPosition } from "./cards";
+import { DEFAULT_PHOTO_POSITION, MAX_PHOTO_ZOOM, MIN_PHOTO_ZOOM, normalizeJersey, type PhotoPosition } from "./cards";
 import { defaultSlots, type PlayerOverrides, type StatSlot } from "./cardStats";
 import { isCardTemplateId, type CardTemplateId } from "./cardTemplates";
 
@@ -41,7 +41,8 @@ function isPhotoPosition(value: unknown): value is PhotoPosition {
     typeof position.x === "number" &&
     typeof position.y === "number" &&
     Number.isFinite(position.x) &&
-    Number.isFinite(position.y)
+    Number.isFinite(position.y) &&
+    (position.zoom === undefined || (typeof position.zoom === "number" && Number.isFinite(position.zoom)))
   );
 }
 
@@ -107,7 +108,8 @@ export function normalizePhotoPosition(position?: PhotoPosition | null): PhotoPo
   if (!position) return { ...DEFAULT_PHOTO_POSITION };
   return {
     x: Math.min(100, Math.max(0, position.x)),
-    y: Math.min(100, Math.max(0, position.y))
+    y: Math.min(100, Math.max(0, position.y)),
+    zoom: Math.min(MAX_PHOTO_ZOOM, Math.max(MIN_PHOTO_ZOOM, position.zoom ?? MIN_PHOTO_ZOOM))
   };
 }
 

@@ -800,7 +800,7 @@ export function CaptainTools() {
                 </button>
               </div>
               <label className="field-label">Player photo</label>
-              <p className="captain-hint">JPEG, PNG, or WebP. Drag the preview to reframe the face.</p>
+              <p className="captain-hint">JPEG, PNG, or WebP. Drag the preview to reframe the face, and zoom in if they're small in the shot.</p>
               <input
                 ref={photoInputRef}
                 type="file"
