@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, ImagePlus, Pin, Printer, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, Download, FileDown, ImagePlus, Pin, Printer, RotateCcw, Search, X } from "lucide-react";
 import { getPlayers, getSeasons, peekSeasonPlayers } from "../api";
 import { BrandMark } from "../league/BrandMark";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
-import { cardTitleLine, DEFAULT_PHOTO_POSITION, normalizeJersey, toTradingCard, type PhotoPosition } from "../lib/cards";
+import {
+  cardTitleLine,
+  DEFAULT_PHOTO_POSITION,
+  MAX_CARD_NAME_LENGTH,
+  normalizeCardName,
+  normalizeJersey,
+  toTradingCard,
+  type PhotoPosition
+} from "../lib/cards";
 import {
   addSlot,
   canAddSlot,
@@ -34,8 +42,10 @@ import {
 import { filterAndSortPlayers } from "../lib/query";
 import { trackClick, trackDrawerClose, trackEvent, trackFilter, trackPageView } from "../lib/analytics";
 import { useDebouncedSearchTrack } from "../lib/useDebouncedSearchTrack";
+import { useCardPdf } from "../lib/useCardPdf";
 import { usePrintCards } from "../lib/usePrintCards";
 import type { Player, PlayersResponse, SeasonInfo } from "../types";
+import { CardExportStage } from "./CardExportStage";
 import { PhotoPositionStage } from "./PhotoPositionStage";
 import { PrintSheet } from "./PrintSheet";
 import { TradingCard } from "./TradingCard";
@@ -72,6 +82,7 @@ export function CaptainTools() {
   const [pinnedOnly, setPinnedOnly] = useState(stored.pinnedOnly);
   const [teamColors, setTeamColors] = useState<Record<string, TeamCardColors>>(stored.teamColors);
   const [numbers, setNumbers] = useState<Record<string, string>>(stored.numbers);
+  const [names, setNames] = useState<Record<string, string>>(stored.names);
   const [showTitleLine, setShowTitleLine] = useState(stored.showTitleLine);
   const [colorTeam, setColorTeam] = useState(stored.teamFilter);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,6 +93,7 @@ export function CaptainTools() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const exportCardRef = useRef<HTMLDivElement>(null);
   const { printCards, requestPrint } = usePrintCards();
+  const { pdfCards, pdfProgress, pdfError, requestPdf, stageRef: pdfStageRef } = useCardPdf();
   const printCtx = { league: league.slug, season, tab: "captain_tools" };
   const activeTemplate = cardTemplate(template);
 
@@ -149,6 +161,7 @@ export function CaptainTools() {
         teamFilter: team,
         teamColors,
         numbers,
+        names,
         showTitleLine
       },
       league.slug
@@ -169,6 +182,7 @@ export function CaptainTools() {
     team,
     teamColors,
     numbers,
+    names,
     showTitleLine,
     league.slug
   ]);
@@ -201,6 +215,7 @@ export function CaptainTools() {
     const personal = (notes[player.id] ?? "").trim() || defaultNote.trim();
     const colors = player.team ? teamColors[player.team] : undefined;
     return toTradingCard(player, season, data?.meta.teamLogos, {
+      name: names[player.id]?.trim() || undefined,
       number: numbers[player.id],
       lineItems: resolveLineItems(player, slots, overrides[player.id], presentation.cardOptions),
       note: personal,
@@ -301,6 +316,10 @@ export function CaptainTools() {
       const { [playerId]: _drop, ...rest } = current;
       return rest;
     });
+    setNames((current) => {
+      const { [playerId]: _drop, ...rest } = current;
+      return rest;
+    });
     setPhotoError(null);
   }
 
@@ -310,6 +329,7 @@ export function CaptainTools() {
     setPhotos({});
     setPhotoPositions({});
     setNumbers({});
+    setNames({});
     setPhotoError(null);
   }
 
@@ -416,6 +436,17 @@ export function CaptainTools() {
         return rest;
       }
       return { ...current, [playerId]: jersey };
+    });
+  }
+
+  function setCardName(playerId: string, value: string) {
+    const name = normalizeCardName(value);
+    setNames((current) => {
+      if (!name.trim()) {
+        const { [playerId]: _drop, ...rest } = current;
+        return rest;
+      }
+      return { ...current, [playerId]: name };
     });
   }
 
@@ -699,7 +730,8 @@ export function CaptainTools() {
                 {(Object.keys(overrides).length > 0 ||
                   Object.keys(notes).length > 0 ||
                   Object.keys(photos).length > 0 ||
-                  Object.keys(numbers).length > 0) && (
+                  Object.keys(numbers).length > 0 ||
+                  Object.keys(names).length > 0) && (
                   <button
                     type="button"
                     className="text-action"
@@ -721,6 +753,22 @@ export function CaptainTools() {
                     Print {players.length === 1 ? "1 card" : `${players.length} cards`}
                   </button>
                 )}
+                {players.length > 0 && (
+                  <button
+                    type="button"
+                    className="print-action"
+                    disabled={Boolean(pdfCards)}
+                    title="One card per page, 2.5 × 3.5 in with 1/8 in bleed, 300 DPI"
+                    onClick={() =>
+                      requestPdf(players.map(cardFor), { ...printCtx, source: "captain_bulk" }, team || league.name)
+                    }
+                  >
+                    <FileDown size={15} />
+                    {pdfProgress && pdfProgress.total > 1
+                      ? `Saving ${pdfProgress.done}/${pdfProgress.total}…`
+                      : "Print-shop PDF"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -730,6 +778,7 @@ export function CaptainTools() {
                 <span>{error}</span>
               </div>
             )}
+            {pdfError && !selected ? <p className="captain-hint captain-photo-error">{pdfError}</p> : null}
             {loading && <div className="loading">Loading {season}…</div>}
             {!loading && (
               <div className="trading-card-grid">
@@ -829,6 +878,17 @@ export function CaptainTools() {
                 ) : null}
               </div>
               {photoError ? <p className="captain-hint captain-photo-error">{photoError}</p> : null}
+              <label className="field-label" htmlFor="captain-card-name">Name on card</label>
+              <p className="captain-hint">Spell out the full name if the roster shortens it. Long names shrink to fit.</p>
+              <input
+                id="captain-card-name"
+                className="captain-name-input"
+                maxLength={MAX_CARD_NAME_LENGTH}
+                value={names[selected.id] ?? ""}
+                placeholder={selected.name}
+                autoComplete="off"
+                onChange={(event) => setCardName(selected.id, event.target.value)}
+              />
               <label className="field-label">Jersey number</label>
               <p className="captain-hint">Shows as the badge in the top-left. Digits only, up to 3.</p>
               <input
@@ -885,6 +945,7 @@ export function CaptainTools() {
                 <RotateCcw size={14} /> Reset this player
               </button>
               {exportError ? <p className="captain-hint captain-photo-error">{exportError}</p> : null}
+              {pdfError ? <p className="captain-hint captain-photo-error">{pdfError}</p> : null}
               <div className="captain-export-actions">
                 <button
                   type="button"
@@ -893,6 +954,17 @@ export function CaptainTools() {
                   onClick={() => void downloadSelectedPng(selected)}
                 >
                   <Download size={14} /> {exportBusy ? "Saving…" : "Download PNG"}
+                </button>
+                <button
+                  type="button"
+                  className="print-action detail-print"
+                  disabled={Boolean(pdfCards)}
+                  title="2.5 × 3.5 in with 1/8 in bleed, 300 DPI"
+                  onClick={() =>
+                    requestPdf([cardFor(selected)], { ...printCtx, source: "captain_single", player_id: selected.id })
+                  }
+                >
+                  <FileDown size={14} /> {pdfCards ? "Saving…" : "Print-shop PDF"}
                 </button>
                 <button
                   type="button"
@@ -907,6 +979,7 @@ export function CaptainTools() {
         </div>
       </div>
       <PrintSheet cards={printCards ?? []} />
+      <CardExportStage cards={pdfCards} stageRef={pdfStageRef} />
     </>
   );
 }
