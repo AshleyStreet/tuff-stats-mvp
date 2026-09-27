@@ -5,10 +5,9 @@ const EXPORT_WIDTH = 750;
 const EXPORT_HEIGHT = Math.round((EXPORT_WIDTH * 3.5) / 2.5);
 const EXPORT_BACKGROUND = "#0a0a0a";
 
-/** Standard trading card trim (inches), plus the 1/8" bleed print shops ask for on every side. */
+/** Standard trading card size in inches, the same as Magic: The Gathering or Pokémon cards. */
 export const PRINT_TRIM_WIDTH_IN = 2.5;
 export const PRINT_TRIM_HEIGHT_IN = 3.5;
-export const PRINT_BLEED_IN = 0.125;
 const PRINT_DPI = 300;
 /** Lay the card out at on-screen size, then scale up so text and borders match what the captain saw. */
 const PRINT_LAYOUT_WIDTH = 250;
@@ -113,14 +112,14 @@ export function cardDownloadName(card: TradingCardData) {
 }
 
 export function cardsPdfName(cards: TradingCardData[], label?: string) {
-  if (cards.length === 1) return `${cardFileBase(cards[0])}-${cards[0].season}-print.pdf`;
+  if (cards.length === 1) return `${cardFileBase(cards[0])}-${cards[0].season}-card.pdf`;
   const base =
     (label ?? "")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "cards";
-  return `${base}-${cards[0]?.season ?? ""}-${cards.length}-cards-print.pdf`.replace(/--+/g, "-");
+  return `${base}-${cards[0]?.season ?? ""}-${cards.length}-cards.pdf`.replace(/--+/g, "-");
 }
 
 function errorMessage(err: unknown, fallback: string) {
@@ -191,38 +190,40 @@ function triggerDownload(href: string, filename: string) {
   link.remove();
 }
 
-/**
- * Grow the canvas by `bleed` px per side by stretching the outermost row/column of pixels outward,
- * so a slightly-off cut still lands on card art instead of a white sliver.
- */
-function addBleed(source: HTMLCanvasElement, bleed: number): HTMLCanvasElement {
-  const w = source.width;
-  const h = source.height;
-  const out = document.createElement("canvas");
-  out.width = w + bleed * 2;
-  out.height = h + bleed * 2;
-  const ctx = out.getContext("2d");
-  if (!ctx) throw new Error("Couldn't prepare the print file in this browser.");
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = EXPORT_BACKGROUND;
-  ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(source, bleed, bleed);
-  // edges
-  ctx.drawImage(source, 0, 0, w, 1, bleed, 0, w, bleed);
-  ctx.drawImage(source, 0, h - 1, w, 1, bleed, h + bleed, w, bleed);
-  ctx.drawImage(source, 0, 0, 1, h, 0, bleed, bleed, h);
-  ctx.drawImage(source, w - 1, 0, 1, h, w + bleed, bleed, bleed, h);
-  // corners
-  ctx.drawImage(source, 0, 0, 1, 1, 0, 0, bleed, bleed);
-  ctx.drawImage(source, w - 1, 0, 1, 1, w + bleed, 0, bleed, bleed);
-  ctx.drawImage(source, 0, h - 1, 1, 1, 0, h + bleed, bleed, bleed);
-  ctx.drawImage(source, w - 1, h - 1, 1, 1, w + bleed, h + bleed, bleed, bleed);
-  return out;
+/** US Letter, portrait, holding a 3 × 3 grid of cards that touch edge to edge. */
+const SHEET_WIDTH_IN = 8.5;
+const SHEET_HEIGHT_IN = 11;
+export const CARDS_PER_ROW = 3;
+export const CARDS_PER_COLUMN = 3;
+export const CARDS_PER_SHEET = CARDS_PER_ROW * CARDS_PER_COLUMN;
+const GRID_LEFT_IN = (SHEET_WIDTH_IN - CARDS_PER_ROW * PRINT_TRIM_WIDTH_IN) / 2;
+const GRID_TOP_IN = (SHEET_HEIGHT_IN - CARDS_PER_COLUMN * PRINT_TRIM_HEIGHT_IN) / 2;
+/** Cut marks stop short of the cards so a cut along them never leaves a stray line on the card. */
+const CUT_MARK_GAP_IN = 0.06;
+const CUT_MARK_WIDTH_IN = 0.006;
+
+/** Short guide lines in the margins, lined up with every edge of the card grid. */
+function drawCutMarks(doc: import("jspdf").jsPDF) {
+  const gridRight = GRID_LEFT_IN + CARDS_PER_ROW * PRINT_TRIM_WIDTH_IN;
+  const gridBottom = GRID_TOP_IN + CARDS_PER_COLUMN * PRINT_TRIM_HEIGHT_IN;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(CUT_MARK_WIDTH_IN);
+
+  for (let col = 0; col <= CARDS_PER_ROW; col += 1) {
+    const x = GRID_LEFT_IN + col * PRINT_TRIM_WIDTH_IN;
+    doc.line(x, 0, x, GRID_TOP_IN - CUT_MARK_GAP_IN);
+    doc.line(x, gridBottom + CUT_MARK_GAP_IN, x, SHEET_HEIGHT_IN);
+  }
+  for (let row = 0; row <= CARDS_PER_COLUMN; row += 1) {
+    const y = GRID_TOP_IN + row * PRINT_TRIM_HEIGHT_IN;
+    doc.line(0, y, GRID_LEFT_IN - CUT_MARK_GAP_IN, y);
+    doc.line(gridRight + CUT_MARK_GAP_IN, y, SHEET_WIDTH_IN, y);
+  }
 }
 
 /**
- * One card per page at 2.75" × 3.75" (2.5" × 3.5" trim + 1/8" bleed), 300 DPI — the format
- * most print shops take for trading cards without further setup.
+ * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), nine to a
+ * letter page with cut marks, rendered at 300 DPI. Print at 100% / "actual size".
  */
 export async function downloadCardsPdf(
   nodes: HTMLElement[],
@@ -232,13 +233,15 @@ export async function downloadCardsPdf(
   if (!nodes.length) return;
   try {
     const { jsPDF } = await import("jspdf");
-    const pageWidth = PRINT_TRIM_WIDTH_IN + PRINT_BLEED_IN * 2;
-    const pageHeight = PRINT_TRIM_HEIGHT_IN + PRINT_BLEED_IN * 2;
-    const bleedPx = Math.round(PRINT_BLEED_IN * PRINT_DPI);
-    const doc = new jsPDF({ unit: "in", format: [pageWidth, pageHeight], orientation: "portrait", compress: true });
+    const doc = new jsPDF({ unit: "in", format: "letter", orientation: "portrait", compress: true });
     doc.setProperties({ title: filename.replace(/\.pdf$/i, ""), creator: "AfterWhistle" });
 
     for (const [index, node] of nodes.entries()) {
+      const slot = index % CARDS_PER_SHEET;
+      if (slot === 0) {
+        if (index > 0) doc.addPage("letter", "portrait");
+        drawCutMarks(doc);
+      }
       const canvas = await withExportClone(
         node,
         PRINT_LAYOUT_WIDTH,
@@ -253,9 +256,18 @@ export async function downloadCardsPdf(
           }),
         "tc-print-export"
       );
-      const page = addBleed(canvas, bleedPx);
-      if (index > 0) doc.addPage([pageWidth, pageHeight], "portrait");
-      doc.addImage(page.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pageWidth, pageHeight, undefined, "NONE");
+      const x = GRID_LEFT_IN + (slot % CARDS_PER_ROW) * PRINT_TRIM_WIDTH_IN;
+      const y = GRID_TOP_IN + Math.floor(slot / CARDS_PER_ROW) * PRINT_TRIM_HEIGHT_IN;
+      doc.addImage(
+        canvas.toDataURL("image/jpeg", 0.95),
+        "JPEG",
+        x,
+        y,
+        PRINT_TRIM_WIDTH_IN,
+        PRINT_TRIM_HEIGHT_IN,
+        undefined,
+        "NONE"
+      );
       onProgress?.(index + 1, nodes.length);
     }
 
