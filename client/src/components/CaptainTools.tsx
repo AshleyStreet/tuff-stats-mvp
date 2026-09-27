@@ -975,8 +975,8 @@ export function CaptainTools() {
                 </button>
               </div>
               <p className="captain-hint">
-                PDFs are real card size (2.5 × 3.5 in, like Magic cards), 9 to a letter page with cut marks. Print at
-                100% / “Actual size”, not “Fit to page”.
+                PDFs are real card size, 9 to a letter page with cut marks. Print at 100% / “Actual size”,
+                not “Fit to page”.
               </p>
             </aside>
           )}
