@@ -1262,27 +1262,16 @@ button.log-row:hover {
   height: 100%;
   padding: 10px 10px 8px;
   background: var(--tc-bg);
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%
-  );
+  border-radius: inherit;
 }
 
+/* Follows the face's corner radius so the border runs unbroken around all four corners. */
 .tc-frame::before {
   content: "";
   position: absolute;
   inset: 0;
   border: 2px solid var(--tc-border);
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%
-  );
+  border-radius: inherit;
   pointer-events: none;
   z-index: 4;
 }
