@@ -758,7 +758,7 @@ export function CaptainTools() {
                     type="button"
                     className="print-action"
                     disabled={Boolean(pdfCards)}
-                    title="One card per page, 2.5 × 3.5 in with 1/8 in bleed, 300 DPI"
+                    title="Real card size (2.5 × 3.5 in), 9 per letter page with cut marks. Print at 100% / actual size."
                     onClick={() =>
                       requestPdf(players.map(cardFor), { ...printCtx, source: "captain_bulk" }, team || league.name)
                     }
@@ -766,7 +766,7 @@ export function CaptainTools() {
                     <FileDown size={15} />
                     {pdfProgress && pdfProgress.total > 1
                       ? `Saving ${pdfProgress.done}/${pdfProgress.total}…`
-                      : "Print-shop PDF"}
+                      : "Save PDF"}
                   </button>
                 )}
               </div>
@@ -959,12 +959,12 @@ export function CaptainTools() {
                   type="button"
                   className="print-action detail-print"
                   disabled={Boolean(pdfCards)}
-                  title="2.5 × 3.5 in with 1/8 in bleed, 300 DPI"
+                  title="Real card size (2.5 × 3.5 in) on a letter page with cut marks. Print at 100% / actual size."
                   onClick={() =>
                     requestPdf([cardFor(selected)], { ...printCtx, source: "captain_single", player_id: selected.id })
                   }
                 >
-                  <FileDown size={14} /> {pdfCards ? "Saving…" : "Print-shop PDF"}
+                  <FileDown size={14} /> {pdfCards ? "Saving…" : "Save PDF"}
                 </button>
                 <button
                   type="button"
@@ -974,6 +974,10 @@ export function CaptainTools() {
                   <Printer size={14} /> Print this card
                 </button>
               </div>
+              <p className="captain-hint">
+                PDFs are real card size, 9 to a letter page with cut marks. Print at 100% / “Actual size”,
+                not “Fit to page”.
+              </p>
             </aside>
           )}
         </div>
