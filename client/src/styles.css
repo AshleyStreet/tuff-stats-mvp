@@ -1504,6 +1504,52 @@ div.tc-hero-logo {
   transform: none;
 }
 
+/* Card backs (printed sheets and PDFs). Sized in cqw so they scale with the card. */
+.tc-back .tc-back-frame {
+  grid-template-rows: 1fr auto;
+  padding: 7.2cqw 6.4cqw 5.6cqw;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tc-accent) 10%, transparent) 0 2px,
+      transparent 2px 10px
+    ),
+    var(--tc-bg);
+}
+.tc-back-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.tc-back-logo {
+  width: 52cqw;
+  height: 52cqw;
+  object-fit: contain;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--tc-border);
+  color: var(--tc-accent);
+  font-size: 16.8cqw;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+img.tc-back-logo {
+  border: 0;
+  border-radius: 0;
+}
+.tc-back-footer {
+  padding-top: 2.4cqw;
+  border-top: 1px solid var(--tc-border);
+  font-size: 3.4cqw;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.tc-back-season { color: var(--tc-accent); }
+
 .captain-hint {
   margin: 8px 0 14px;
   color: #8d8f93;
@@ -2215,51 +2261,6 @@ div.tc-hero-logo {
     border-radius: 4px;
   }
   .print-sheet .tc-hero-shade { opacity: 0.85; }
-
-  .tc-back .tc-back-frame {
-    grid-template-rows: 1fr auto;
-    padding: 0.18in 0.16in 0.14in;
-    background:
-      repeating-linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--tc-accent) 10%, transparent) 0 2px,
-        transparent 2px 10px
-      ),
-      var(--tc-bg);
-  }
-  .tc-back-mark {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
-  .tc-back-logo {
-    width: 1.3in;
-    height: 1.3in;
-    object-fit: contain;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    border: 2px solid var(--tc-border);
-    color: var(--tc-accent);
-    font-size: 0.42in;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  img.tc-back-logo {
-    border: 0;
-    border-radius: 0;
-  }
-  .tc-back-footer {
-    padding-top: 0.06in;
-    border-top: 1px solid var(--tc-border);
-    font-size: 0.085in;
-    letter-spacing: 0.04em;
-    text-align: center;
-    text-transform: uppercase;
-  }
-  .tc-back-season { color: var(--tc-accent); }
 }
 
 /* ---------- admin: leads ---------- */
