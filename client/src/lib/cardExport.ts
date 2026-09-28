@@ -71,7 +71,7 @@ function inlineImage(url: string): Promise<string | null> {
  */
 async function inlineExternalImages(root: HTMLElement) {
   const name = root.querySelector(".tc-name")?.textContent?.trim() || "?";
-  const initials = name
+  const initials = root.dataset.exportInitials || name
     .split(/\s+/)
     .map((part) => part[0])
     .filter(Boolean)
@@ -224,55 +224,71 @@ function drawCutMarks(doc: import("jspdf").jsPDF) {
 /**
  * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), nine to a
  * letter page with cut marks, rendered at 300 DPI. Print at 100% / "actual size".
+ *
+ * With `backs` (one per front, same order), each page of fronts is followed by a page of backs
+ * mirrored left-to-right, so they line up when printed double-sided and flipped on the long edge.
  */
 export async function downloadCardsPdf(
   nodes: HTMLElement[],
   filename: string,
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
+  backs: HTMLElement[] = []
 ) {
   if (!nodes.length) return;
   try {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit: "in", format: "letter", orientation: "portrait", compress: true });
     doc.setProperties({ title: filename.replace(/\.pdf$/i, ""), creator: "AfterWhistle" });
+    const total = nodes.length + backs.length;
+    let done = 0;
 
-    for (const [index, node] of nodes.entries()) {
-      const slot = index % CARDS_PER_SHEET;
-      if (slot === 0) {
-        if (index > 0) doc.addPage("letter", "portrait");
-        drawCutMarks(doc);
+    for (let start = 0; start < nodes.length; start += CARDS_PER_SHEET) {
+      if (start > 0) doc.addPage("letter", "portrait");
+      drawCutMarks(doc);
+      for (const [slot, node] of nodes.slice(start, start + CARDS_PER_SHEET).entries()) {
+        await drawCard(doc, node, slot % CARDS_PER_ROW, Math.floor(slot / CARDS_PER_ROW));
+        onProgress?.(++done, total);
       }
-      const canvas = await withExportClone(
-        node,
-        PRINT_LAYOUT_WIDTH,
-        PRINT_LAYOUT_HEIGHT,
-        (clone) =>
-          toCanvas(clone, {
-            cacheBust: true,
-            pixelRatio: PRINT_PIXEL_RATIO,
-            width: PRINT_LAYOUT_WIDTH,
-            height: PRINT_LAYOUT_HEIGHT,
-            backgroundColor: EXPORT_BACKGROUND
-          }),
-        "tc-print-export"
-      );
-      const x = GRID_LEFT_IN + (slot % CARDS_PER_ROW) * PRINT_TRIM_WIDTH_IN;
-      const y = GRID_TOP_IN + Math.floor(slot / CARDS_PER_ROW) * PRINT_TRIM_HEIGHT_IN;
-      doc.addImage(
-        canvas.toDataURL("image/jpeg", 0.95),
-        "JPEG",
-        x,
-        y,
-        PRINT_TRIM_WIDTH_IN,
-        PRINT_TRIM_HEIGHT_IN,
-        undefined,
-        "NONE"
-      );
-      onProgress?.(index + 1, nodes.length);
+
+      const sheetBacks = backs.slice(start, start + CARDS_PER_SHEET);
+      if (!sheetBacks.length) continue;
+      doc.addPage("letter", "portrait");
+      drawCutMarks(doc);
+      for (const [slot, node] of sheetBacks.entries()) {
+        await drawCard(doc, node, CARDS_PER_ROW - 1 - (slot % CARDS_PER_ROW), Math.floor(slot / CARDS_PER_ROW));
+        onProgress?.(++done, total);
+      }
     }
 
     doc.save(filename);
   } catch (err) {
     throw new Error(errorMessage(err, "Couldn't save those cards as a PDF."));
   }
+}
+
+async function drawCard(doc: import("jspdf").jsPDF, node: HTMLElement, col: number, row: number) {
+  const canvas = await withExportClone(
+    node,
+    PRINT_LAYOUT_WIDTH,
+    PRINT_LAYOUT_HEIGHT,
+    (clone) =>
+      toCanvas(clone, {
+        cacheBust: true,
+        pixelRatio: PRINT_PIXEL_RATIO,
+        width: PRINT_LAYOUT_WIDTH,
+        height: PRINT_LAYOUT_HEIGHT,
+        backgroundColor: EXPORT_BACKGROUND
+      }),
+    "tc-print-export"
+  );
+  doc.addImage(
+    canvas.toDataURL("image/jpeg", 0.95),
+    "JPEG",
+    GRID_LEFT_IN + col * PRINT_TRIM_WIDTH_IN,
+    GRID_TOP_IN + row * PRINT_TRIM_HEIGHT_IN,
+    PRINT_TRIM_WIDTH_IN,
+    PRINT_TRIM_HEIGHT_IN,
+    undefined,
+    "NONE"
+  );
 }

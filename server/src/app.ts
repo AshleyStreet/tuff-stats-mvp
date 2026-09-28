@@ -490,6 +490,22 @@ export function createApp(
     }
   });
 
+  /** The league's own logo served same-origin, for the backs of exported cards. */
+  app.get("/api/league-logo", async (req, res) => {
+    const url = tenant(req).league.branding.logo;
+    if (!url) return res.status(404).json({ error: "This league has no logo" });
+    try {
+      const image = await logoProxy.get(url);
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.type(image.contentType).send(image.body);
+    } catch (error) {
+      const status = error instanceof LogoProxyError ? error.status : 502;
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return res.status(status).json({ error: "Unable to load logo", detail: message });
+    }
+  });
+
   if (fs.existsSync(clientDist)) {
     const indexPath = path.join(clientDist, "index.html");
     const indexTemplate = fs.readFileSync(indexPath, "utf8");
