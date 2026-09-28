@@ -5,6 +5,8 @@ import { TeamLogo } from "./TeamLogo";
 /** Reverse side of a printed trading card, themed to match its front. */
 export function CardBack({ card }: { card: TradingCardData }) {
   const league = useLeague();
+  const logo = league.branding.logo || undefined;
+  const mark = initials(league.shortName || league.name);
   const accent = card.theme?.border ? readableCardAccent(card.theme.border) : undefined;
   const faceStyle = {
     ...(card.theme?.background ? { ["--tc-bg" as string]: card.theme.background } : {}),
@@ -13,15 +15,16 @@ export function CardBack({ card }: { card: TradingCardData }) {
   };
 
   return (
-    <article className="trading-card tc-back">
+    <article className="trading-card tc-back" data-export-initials={mark}>
       <div className="trading-card-face" style={faceStyle}>
         <div className="tc-frame tc-back-frame">
           <div className="tc-back-mark">
             <TeamLogo
               name={league.name}
-              src={league.branding.logo || undefined}
+              src={logo}
               className="tc-back-logo"
-              fallback={initials(league.shortName || league.name)}
+              fallback={mark}
+              exportSrc={logo && /^https?:/i.test(logo) ? "/api/league-logo" : logo}
             />
           </div>
           <div className="tc-back-footer">

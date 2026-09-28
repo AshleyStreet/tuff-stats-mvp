@@ -22,7 +22,8 @@ export function useCardPdf() {
   function requestPdf(cards: TradingCardData[], context: AnalyticsProps = {}, label?: string) {
     if (!cards.length || job) return;
     setError(null);
-    setProgress({ done: 0, total: cards.length });
+    // Each card is drawn twice: its front, then its back.
+    setProgress({ done: 0, total: cards.length * 2 });
     setJob({ cards, label, context });
   }
 
@@ -32,12 +33,19 @@ export function useCardPdf() {
 
     async function run(current: PdfJob) {
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
-      const nodes = [...(stageRef.current?.querySelectorAll<HTMLElement>(".trading-card") ?? [])];
+      const stage = stageRef.current;
+      const nodes = [...(stage?.querySelectorAll<HTMLElement>(".trading-card:not(.tc-back)") ?? [])];
+      const backs = [...(stage?.querySelectorAll<HTMLElement>(".trading-card.tc-back") ?? [])];
       try {
         if (!nodes.length) throw new Error("Couldn't find those cards to export.");
-        await downloadCardsPdf(nodes, cardsPdfName(current.cards, current.label), (done, total) => {
-          if (!cancelled) setProgress({ done, total });
-        });
+        await downloadCardsPdf(
+          nodes,
+          cardsPdfName(current.cards, current.label),
+          (done, total) => {
+            if (!cancelled) setProgress({ done, total });
+          },
+          backs
+        );
         trackEvent("cards_pdf", { count: current.cards.length, ...current.context });
       } catch (err) {
         if (!cancelled) {
