@@ -2191,10 +2191,11 @@ div.tc-hero-logo {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .print-page:last-child {
+  .print-duplex:last-child .print-page:last-child {
     page-break-after: auto;
     break-after: auto;
   }
+  .print-slot-blank { width: 2.5in; height: 3.5in; }
   .print-page.single {
     display: flex;
     justify-content: center;
@@ -2214,6 +2215,51 @@ div.tc-hero-logo {
     border-radius: 4px;
   }
   .print-sheet .tc-hero-shade { opacity: 0.85; }
+
+  .tc-back .tc-back-frame {
+    grid-template-rows: 1fr auto;
+    padding: 0.18in 0.16in 0.14in;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--tc-accent) 10%, transparent) 0 2px,
+        transparent 2px 10px
+      ),
+      var(--tc-bg);
+  }
+  .tc-back-mark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .tc-back-logo {
+    width: 1.3in;
+    height: 1.3in;
+    object-fit: contain;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px solid var(--tc-border);
+    color: var(--tc-accent);
+    font-size: 0.42in;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  img.tc-back-logo {
+    border: 0;
+    border-radius: 0;
+  }
+  .tc-back-footer {
+    padding-top: 0.06in;
+    border-top: 1px solid var(--tc-border);
+    font-size: 0.085in;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .tc-back-season { color: var(--tc-accent); }
 }
 
 /* ---------- admin: leads ---------- */
