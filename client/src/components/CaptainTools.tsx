@@ -745,7 +745,7 @@ export function CaptainTools() {
                     type="button"
                     className="print-action"
                     disabled={Boolean(pdfCards)}
-                    title="One card per page at real size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
+                    title="One card per letter page at real size (2.5 × 3.5 in), with bleed and crop marks. Print at 100% / actual size."
                     onClick={() =>
                       requestPdf(players.map(cardFor), { ...pdfCtx, source: "captain_bulk" }, team || league.name)
                     }
@@ -761,7 +761,7 @@ export function CaptainTools() {
                     type="button"
                     className="print-action"
                     disabled={Boolean(pdfCards)}
-                    title="The card back on its own page (2.5 × 3.5 in with 1/8 in bleed), to print behind every front."
+                    title="The card back on its own letter page, lined up to print behind every front."
                     onClick={() =>
                       requestPdf(
                         [cardFor(players[0])],
@@ -965,7 +965,7 @@ export function CaptainTools() {
                   type="button"
                   className="print-action detail-print"
                   disabled={Boolean(pdfCards)}
-                  title="Real card size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
+                  title="Real card size (2.5 × 3.5 in) on a letter page, with bleed and crop marks. Print at 100% / actual size."
                   onClick={() =>
                     requestPdf([cardFor(selected)], { ...pdfCtx, source: "captain_single", player_id: selected.id })
                   }
@@ -974,7 +974,7 @@ export function CaptainTools() {
                 </button>
               </div>
               <p className="captain-hint">
-                PDFs are for a print shop: one card per page, real card size (2.5 × 3.5 in) with 1/8 in bleed.
+                PDFs have one card per letter page at real size (2.5 × 3.5 in), with bleed and crop marks. Print at 100% / “Actual size”.
                 The back is its own PDF.
               </p>
             </aside>
