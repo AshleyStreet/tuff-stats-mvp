@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, ExternalLink, Printer, Shield, Trophy, X, Zap } from "lucide-react";
+import { CalendarDays, ExternalLink, FileDown, Shield, Trophy, X, Zap } from "lucide-react";
 import { getPlayerGameLog, getPlayerProfile, peekPlayerProfile } from "../api";
 import { cardTitleLine, toTradingCard, type TradingCardData } from "../lib/cards";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
@@ -18,7 +18,8 @@ interface Props {
   onClose: () => void;
   onSelectSeason?: (season: string) => void;
   onSelectGame?: (game: ScheduleGame) => void;
-  onPrintCard?: (card: TradingCardData) => void;
+  onDownloadCard?: (card: TradingCardData) => void;
+  cardPdfBusy?: boolean;
 }
 
 const groupIcons = {
@@ -49,7 +50,7 @@ function formatResult(outcome?: string, score?: number, oppScore?: number) {
   return mark || "—";
 }
 
-export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame, onPrintCard }: Props) {
+export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelectSeason, onSelectGame, onDownloadCard, cardPdfBusy }: Props) {
   const league = useLeague();
   const presentation = usePresentation();
   const cached = peekPlayerProfile(player.id);
@@ -175,12 +176,13 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
               ? `${career.seasonsPlayed} season${career.seasonsPlayed === 1 ? "" : "s"} · ${readStat(career, "totalPoints")} career pts`
               : `${readStat(player, "gms")} games · ${readStat(player, "totalPoints")} pts`}
           </p>
-          {onPrintCard && seasonView && (
+          {onDownloadCard && seasonView && (
             <button
               type="button"
               className="print-action detail-print"
+              disabled={cardPdfBusy}
               onClick={() =>
-                onPrintCard(
+                onDownloadCard(
                   toTradingCard(player, seasonView.season, teamLogos, {
                     name: displayName,
                     team: seasonView.team ?? teamLabel,
@@ -192,7 +194,7 @@ export function PlayerDetail({ player, activeSeason, teamLogos, onClose, onSelec
                 )
               }
             >
-              <Printer size={14} /> Print card
+              <FileDown size={14} /> {cardPdfBusy ? "Saving…" : "Card PDF"}
             </button>
           )}
         </div>

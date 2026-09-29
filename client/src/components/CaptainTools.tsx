@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, FileDown, ImagePlus, Pin, Printer, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, Download, FileDown, ImagePlus, Pin, RotateCcw, Search, X } from "lucide-react";
 import { getPlayers, getSeasons, peekSeasonPlayers } from "../api";
 import { BrandMark } from "../league/BrandMark";
 import { useLeague, usePresentation } from "../league/LeagueProvider";
@@ -43,11 +43,9 @@ import { filterAndSortPlayers } from "../lib/query";
 import { trackClick, trackDrawerClose, trackEvent, trackFilter, trackPageView } from "../lib/analytics";
 import { useDebouncedSearchTrack } from "../lib/useDebouncedSearchTrack";
 import { useCardPdf } from "../lib/useCardPdf";
-import { usePrintCards } from "../lib/usePrintCards";
 import type { Player, PlayersResponse, SeasonInfo } from "../types";
 import { CardExportStage } from "./CardExportStage";
 import { PhotoPositionStage } from "./PhotoPositionStage";
-import { PrintSheet } from "./PrintSheet";
 import { TradingCard } from "./TradingCard";
 
 const DEFAULT_TEAM_COLORS: TeamCardColors = {
@@ -92,9 +90,8 @@ export function CaptainTools() {
   const [exportError, setExportError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const exportCardRef = useRef<HTMLDivElement>(null);
-  const { printCards, requestPrint } = usePrintCards();
-  const { pdfCards, pdfProgress, pdfError, requestPdf, stageRef: pdfStageRef } = useCardPdf();
-  const printCtx = { league: league.slug, season, tab: "captain_tools" };
+  const { pdfCards, pdfSide, pdfProgress, pdfError, requestPdf, stageRef: pdfStageRef } = useCardPdf();
+  const pdfCtx = { league: league.slug, season, tab: "captain_tools" };
   const activeTemplate = cardTemplate(template);
 
   useDebouncedSearchTrack(search, league.slug, "captain_tools", season, Boolean(search.trim()));
@@ -747,10 +744,16 @@ export function CaptainTools() {
                   <button
                     type="button"
                     className="print-action"
-                    onClick={() => requestPrint(players.map(cardFor), { ...printCtx, source: "captain_bulk" })}
+                    disabled={Boolean(pdfCards)}
+                    title="One card per page at real size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
+                    onClick={() =>
+                      requestPdf(players.map(cardFor), { ...pdfCtx, source: "captain_bulk" }, team || league.name)
+                    }
                   >
-                    <Printer size={15} />
-                    Print {players.length === 1 ? "1 card" : `${players.length} cards`}
+                    <FileDown size={15} />
+                    {pdfSide === "fronts" && pdfProgress && pdfProgress.total > 1
+                      ? `Saving ${pdfProgress.done}/${pdfProgress.total}…`
+                      : `${players.length === 1 ? "1 card" : `${players.length} cards`} PDF`}
                   </button>
                 )}
                 {players.length > 0 && (
@@ -758,15 +761,18 @@ export function CaptainTools() {
                     type="button"
                     className="print-action"
                     disabled={Boolean(pdfCards)}
-                    title="Real card size (2.5 × 3.5 in), 9 per letter page with cut marks. Print at 100% / actual size."
+                    title="The card back on its own page (2.5 × 3.5 in with 1/8 in bleed), to print behind every front."
                     onClick={() =>
-                      requestPdf(players.map(cardFor), { ...printCtx, source: "captain_bulk" }, team || league.name)
+                      requestPdf(
+                        [cardFor(players[0])],
+                        { ...pdfCtx, source: "captain_back" },
+                        league.shortName || league.name,
+                        "back"
+                      )
                     }
                   >
                     <FileDown size={15} />
-                    {pdfProgress && pdfProgress.total > 1
-                      ? `Saving ${pdfProgress.done}/${pdfProgress.total}…`
-                      : "Save PDF"}
+                    {pdfSide === "back" ? "Saving…" : "Card back PDF"}
                   </button>
                 )}
               </div>
@@ -959,31 +965,23 @@ export function CaptainTools() {
                   type="button"
                   className="print-action detail-print"
                   disabled={Boolean(pdfCards)}
-                  title="Real card size (2.5 × 3.5 in) on a letter page with cut marks. Print at 100% / actual size."
+                  title="Real card size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
                   onClick={() =>
-                    requestPdf([cardFor(selected)], { ...printCtx, source: "captain_single", player_id: selected.id })
+                    requestPdf([cardFor(selected)], { ...pdfCtx, source: "captain_single", player_id: selected.id })
                   }
                 >
-                  <FileDown size={14} /> {pdfCards ? "Saving…" : "Save PDF"}
-                </button>
-                <button
-                  type="button"
-                  className="print-action detail-print"
-                  onClick={() => requestPrint([cardFor(selected)], { ...printCtx, source: "captain_single" })}
-                >
-                  <Printer size={14} /> Print this card
+                  <FileDown size={14} /> {pdfSide === "fronts" ? "Saving…" : "Save PDF"}
                 </button>
               </div>
               <p className="captain-hint">
-                PDFs are real card size, 9 to a letter page with cut marks. Print at 100% / “Actual size”,
-                not “Fit to page”.
+                PDFs are for a print shop: one card per page, real card size (2.5 × 3.5 in) with 1/8 in bleed.
+                The back is its own PDF.
               </p>
             </aside>
           )}
         </div>
       </div>
-      <PrintSheet cards={printCards ?? []} />
-      <CardExportStage cards={pdfCards} stageRef={pdfStageRef} />
+      <CardExportStage cards={pdfCards} side={pdfSide} stageRef={pdfStageRef} />
     </>
   );
 }

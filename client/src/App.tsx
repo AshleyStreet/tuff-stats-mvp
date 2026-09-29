@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Printer, Search, Trophy } from "lucide-react";
+import { ArrowLeft, FileDown, Search, Trophy } from "lucide-react";
 import { BrandMark } from "./league/BrandMark";
 import { useLeague, usePresentation } from "./league/LeagueProvider";
 import { readStat } from "./league/readStat";
@@ -8,7 +8,7 @@ import { GameCard } from "./components/GameCard";
 import { GameDetail } from "./components/GameDetail";
 import { PlayerCard } from "./components/PlayerCard";
 import { PlayerDetail } from "./components/PlayerDetail";
-import { PrintSheet } from "./components/PrintSheet";
+import { CardExportStage } from "./components/CardExportStage";
 import { SportSpinner } from "./components/SportSpinner";
 import { TeamCard } from "./components/TeamCard";
 import { TeamLogo } from "./components/TeamLogo";
@@ -21,7 +21,7 @@ import { buildAppPath, navigateApp, parseAppRoute, resolveTeamName, slugifyTeam 
 import { useDebouncedSearchTrack } from "./lib/useDebouncedSearchTrack";
 import { filterScheduleGames, partitionSchedule } from "./lib/schedule";
 import { buildTeamSummaries, withCanonicalTeams } from "./lib/teams";
-import { usePrintCards } from "./lib/usePrintCards";
+import { useCardPdf } from "./lib/useCardPdf";
 import type { Player, PlayersResponse, ScheduleGame, ScheduleResponse, SeasonInfo } from "./types";
 
 type Tab = "players" | "teams" | "schedule" | "cards";
@@ -55,8 +55,8 @@ export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [scheduleView, setScheduleView] = useState<ScheduleView>("all");
   const [now, setNow] = useState(() => Date.now());
-  const { printCards, requestPrint } = usePrintCards();
-  const printCtx = { league: league.slug, season, tab };
+  const { pdfCards, pdfSide, pdfProgress, pdfError, requestPdf, stageRef: pdfStageRef } = useCardPdf();
+  const pdfCtx = { league: league.slug, season, tab };
 
   function currentRoute() {
     return {
@@ -645,7 +645,7 @@ export default function App() {
                 <>
                   <h1>Trading cards</h1>
                   <p>
-                    {players.length} cards · 2.5&quot; × 3.5&quot; · 9 per letter page · turn on background graphics · cut along the gold border
+                    {players.length} cards · 2.5&quot; × 3.5&quot; · 1/8&quot; bleed · one card per PDF page · back as its own PDF
                     {team ? ` · ${team}` : search ? ` · “${search}”` : ""}
                   </p>
                 </>
@@ -703,12 +703,36 @@ export default function App() {
                 <button
                   type="button"
                   className="print-action"
-                  onClick={() => requestPrint(sheetForPlayers(players), { ...printCtx, source: "bulk" })}
+                  disabled={Boolean(pdfCards)}
+                  title="One card per page at real size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
+                  onClick={() => requestPdf(sheetForPlayers(players), { ...pdfCtx, source: "bulk" }, team || league.name)}
                 >
-                  <Printer size={15} />
-                  Print {players.length} card{players.length === 1 ? "" : "s"}
+                  <FileDown size={15} />
+                  {pdfSide === "fronts" && pdfProgress && pdfProgress.total > 1
+                    ? `Saving ${pdfProgress.done}/${pdfProgress.total}…`
+                    : `${players.length} card${players.length === 1 ? "" : "s"} PDF`}
                 </button>
               )}
+              {(tab === "players" || tab === "cards" || Boolean(activeTeam)) && players.length > 0 && (
+                <button
+                  type="button"
+                  className="print-action"
+                  disabled={Boolean(pdfCards)}
+                  title="The card back on its own page (2.5 × 3.5 in with 1/8 in bleed), to print behind every front."
+                  onClick={() =>
+                    requestPdf(
+                      sheetForPlayers(players.slice(0, 1)),
+                      { ...pdfCtx, source: "bulk_back" },
+                      league.shortName || league.name,
+                      "back"
+                    )
+                  }
+                >
+                  <FileDown size={15} />
+                  {pdfSide === "back" ? "Saving…" : "Card back PDF"}
+                </button>
+              )}
+              {pdfError ? <span className="captain-hint captain-photo-error">{pdfError}</span> : null}
               {(data || schedule) && (
                 <span className="source-badge">
                   {tab === "schedule"
@@ -821,7 +845,8 @@ export default function App() {
             teamLogos={data?.meta.teamLogos}
             onClose={closePlayerDrawer}
             onSelectGame={openGameFromProfile}
-            onPrintCard={(card) => requestPrint([card], { ...printCtx, source: "player_detail" })}
+            onDownloadCard={(card) => requestPdf([card], { ...pdfCtx, source: "player_detail" })}
+            cardPdfBusy={Boolean(pdfCards)}
           />
         )}
       </div>
@@ -839,7 +864,7 @@ export default function App() {
         </footer>
       )}
     </div>
-    <PrintSheet cards={printCards ?? []} />
+    <CardExportStage cards={pdfCards} side={pdfSide} stageRef={pdfStageRef} />
     </>
   );
 }

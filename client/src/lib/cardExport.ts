@@ -1,4 +1,4 @@
-import { toCanvas, toPng } from "html-to-image";
+import { getFontEmbedCSS, toCanvas, toPng } from "html-to-image";
 import type { TradingCardData } from "./cards";
 
 const EXPORT_WIDTH = 750;
@@ -97,29 +97,27 @@ async function inlineExternalImages(root: HTMLElement) {
   }
 }
 
-function cardFileBase(card: TradingCardData) {
+function fileSlug(text: string | undefined, fallback: string) {
   return (
-    card.name
+    (text ?? "")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "card"
+      .replace(/^-|-$/g, "") || fallback
   );
 }
 
 export function cardDownloadName(card: TradingCardData) {
-  return `${cardFileBase(card)}-${card.season}.png`;
+  return `${fileSlug(card.name, "card")}-${card.season}.png`;
 }
 
 export function cardsPdfName(cards: TradingCardData[], label?: string) {
-  if (cards.length === 1) return `${cardFileBase(cards[0])}-${cards[0].season}-card.pdf`;
-  const base =
-    (label ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "cards";
-  return `${base}-${cards[0]?.season ?? ""}-${cards.length}-cards.pdf`.replace(/--+/g, "-");
+  if (cards.length === 1) return `${fileSlug(cards[0].name, "card")}-${cards[0].season}-card.pdf`;
+  return `${fileSlug(label, "cards")}-${cards[0]?.season ?? ""}-${cards.length}-cards.pdf`.replace(/--+/g, "-");
+}
+
+export function cardBackPdfName(card: TradingCardData, label?: string) {
+  return `${fileSlug(label, "card")}-${card.season}-back.pdf`;
 }
 
 function errorMessage(err: unknown, fallback: string) {
@@ -190,74 +188,40 @@ function triggerDownload(href: string, filename: string) {
   link.remove();
 }
 
-/** US Letter, portrait, holding a 3 × 3 grid of cards that touch edge to edge. */
-const SHEET_WIDTH_IN = 8.5;
-const SHEET_HEIGHT_IN = 11;
-export const CARDS_PER_ROW = 3;
-export const CARDS_PER_COLUMN = 3;
-export const CARDS_PER_SHEET = CARDS_PER_ROW * CARDS_PER_COLUMN;
-const GRID_LEFT_IN = (SHEET_WIDTH_IN - CARDS_PER_ROW * PRINT_TRIM_WIDTH_IN) / 2;
-const GRID_TOP_IN = (SHEET_HEIGHT_IN - CARDS_PER_COLUMN * PRINT_TRIM_HEIGHT_IN) / 2;
-/** Cut marks stop short of the cards so a cut along them never leaves a stray line on the card. */
-const CUT_MARK_GAP_IN = 0.06;
-const CUT_MARK_WIDTH_IN = 0.006;
-
-/** Short guide lines in the margins, lined up with every edge of the card grid. */
-function drawCutMarks(doc: import("jspdf").jsPDF) {
-  const gridRight = GRID_LEFT_IN + CARDS_PER_ROW * PRINT_TRIM_WIDTH_IN;
-  const gridBottom = GRID_TOP_IN + CARDS_PER_COLUMN * PRINT_TRIM_HEIGHT_IN;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(CUT_MARK_WIDTH_IN);
-
-  for (let col = 0; col <= CARDS_PER_ROW; col += 1) {
-    const x = GRID_LEFT_IN + col * PRINT_TRIM_WIDTH_IN;
-    doc.line(x, 0, x, GRID_TOP_IN - CUT_MARK_GAP_IN);
-    doc.line(x, gridBottom + CUT_MARK_GAP_IN, x, SHEET_HEIGHT_IN);
-  }
-  for (let row = 0; row <= CARDS_PER_COLUMN; row += 1) {
-    const y = GRID_TOP_IN + row * PRINT_TRIM_HEIGHT_IN;
-    doc.line(0, y, GRID_LEFT_IN - CUT_MARK_GAP_IN, y);
-    doc.line(gridRight + CUT_MARK_GAP_IN, y, SHEET_WIDTH_IN, y);
-  }
-}
+/**
+ * Print-shop pages: one card per page with 1/8 in of bleed on every side, so a page is
+ * 2.75 × 3.75 in around the 2.5 × 3.5 in card. The trim is marked with a TrimBox for the
+ * shop's cutting software.
+ */
+const BLEED_IN = 0.125;
+const PAGE_WIDTH_IN = PRINT_TRIM_WIDTH_IN + 2 * BLEED_IN;
+const PAGE_HEIGHT_IN = PRINT_TRIM_HEIGHT_IN + 2 * BLEED_IN;
+const POINTS_PER_IN = 72;
 
 /**
- * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), nine to a
- * letter page with cut marks, rendered at 300 DPI. Print at 100% / "actual size".
- *
- * With `backs` (one per front, same order), each page of fronts is followed by a page of backs
- * mirrored left-to-right, so they line up when printed double-sided and flipped on the long edge.
+ * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), one per page
+ * with bleed, rendered at 300 DPI. Pass the card backs on their own for a separate back PDF.
  */
 export async function downloadCardsPdf(
   nodes: HTMLElement[],
   filename: string,
-  onProgress?: (done: number, total: number) => void,
-  backs: HTMLElement[] = []
+  onProgress?: (done: number, total: number) => void
 ) {
   if (!nodes.length) return;
   try {
     const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ unit: "in", format: "letter", orientation: "portrait", compress: true });
+    const format = [PAGE_WIDTH_IN, PAGE_HEIGHT_IN];
+    const doc = new jsPDF({ unit: "in", format, orientation: "portrait", compress: true });
     doc.setProperties({ title: filename.replace(/\.pdf$/i, ""), creator: "AfterWhistle" });
-    const total = nodes.length + backs.length;
-    let done = 0;
 
-    for (let start = 0; start < nodes.length; start += CARDS_PER_SHEET) {
-      if (start > 0) doc.addPage("letter", "portrait");
-      drawCutMarks(doc);
-      for (const [slot, node] of nodes.slice(start, start + CARDS_PER_SHEET).entries()) {
-        await drawCard(doc, node, slot % CARDS_PER_ROW, Math.floor(slot / CARDS_PER_ROW));
-        onProgress?.(++done, total);
-      }
-
-      const sheetBacks = backs.slice(start, start + CARDS_PER_SHEET);
-      if (!sheetBacks.length) continue;
-      doc.addPage("letter", "portrait");
-      drawCutMarks(doc);
-      for (const [slot, node] of sheetBacks.entries()) {
-        await drawCard(doc, node, CARDS_PER_ROW - 1 - (slot % CARDS_PER_ROW), Math.floor(slot / CARDS_PER_ROW));
-        onProgress?.(++done, total);
-      }
+    // Embedding the page's fonts is the slow part of each capture, and it's the same for every card.
+    const fonts: { css?: string } = {};
+    for (const [index, node] of nodes.entries()) {
+      if (index > 0) doc.addPage(format, "portrait");
+      markTrim(doc);
+      const page = withBleed(await renderCard(node, fonts));
+      doc.addImage(page.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, PAGE_WIDTH_IN, PAGE_HEIGHT_IN, undefined, "NONE");
+      onProgress?.(index + 1, nodes.length);
     }
 
     doc.save(filename);
@@ -266,29 +230,70 @@ export async function downloadCardsPdf(
   }
 }
 
-async function drawCard(doc: import("jspdf").jsPDF, node: HTMLElement, col: number, row: number) {
-  const canvas = await withExportClone(
+/** Set the page's TrimBox (in points) to the card's edges, inside the bleed. */
+function markTrim(doc: import("jspdf").jsPDF) {
+  const { pageContext } = doc.getCurrentPageInfo() as unknown as {
+    pageContext: { trimBox: { bottomLeftX: number; bottomLeftY: number; topRightX: number; topRightY: number } | null };
+  };
+  pageContext.trimBox = {
+    bottomLeftX: BLEED_IN * POINTS_PER_IN,
+    bottomLeftY: BLEED_IN * POINTS_PER_IN,
+    topRightX: (BLEED_IN + PRINT_TRIM_WIDTH_IN) * POINTS_PER_IN,
+    topRightY: (BLEED_IN + PRINT_TRIM_HEIGHT_IN) * POINTS_PER_IN
+  };
+}
+
+function renderCard(node: HTMLElement, fonts: { css?: string }) {
+  return withExportClone(
     node,
     PRINT_LAYOUT_WIDTH,
     PRINT_LAYOUT_HEIGHT,
-    (clone) =>
-      toCanvas(clone, {
+    async (clone) => {
+      fonts.css ??= await getFontEmbedCSS(clone);
+      return toCanvas(clone, {
         cacheBust: true,
+        fontEmbedCSS: fonts.css,
         pixelRatio: PRINT_PIXEL_RATIO,
         width: PRINT_LAYOUT_WIDTH,
         height: PRINT_LAYOUT_HEIGHT,
         backgroundColor: EXPORT_BACKGROUND
-      }),
+      });
+    },
     "tc-print-export"
   );
-  doc.addImage(
-    canvas.toDataURL("image/jpeg", 0.95),
-    "JPEG",
-    GRID_LEFT_IN + col * PRINT_TRIM_WIDTH_IN,
-    GRID_TOP_IN + row * PRINT_TRIM_HEIGHT_IN,
-    PRINT_TRIM_WIDTH_IN,
-    PRINT_TRIM_HEIGHT_IN,
-    undefined,
-    "NONE"
-  );
+}
+
+/**
+ * Center the card on a page-sized canvas and fill the bleed by mirroring the 1/8 in just
+ * inside each edge outward, so colour and pattern carry on past the trim line and a cut a
+ * little off still lands on the card's own artwork.
+ */
+function withBleed(card: HTMLCanvasElement) {
+  const w = card.width;
+  const h = card.height;
+  const b = Math.round((w / PRINT_TRIM_WIDTH_IN) * BLEED_IN);
+  const page = document.createElement("canvas");
+  page.width = w + 2 * b;
+  page.height = h + 2 * b;
+  const ctx = page.getContext("2d");
+  if (!ctx) throw new Error("Couldn't draw that card.");
+
+  const mirror = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, flipX: boolean, flipY: boolean) => {
+    ctx.save();
+    ctx.translate(dx + (flipX ? sw : 0), dy + (flipY ? sh : 0));
+    ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    ctx.drawImage(card, sx, sy, sw, sh, 0, 0, sw, sh);
+    ctx.restore();
+  };
+
+  ctx.drawImage(card, b, b);
+  mirror(0, 0, w, b, b, 0, false, true); // top
+  mirror(0, h - b, w, b, b, b + h, false, true); // bottom
+  mirror(0, 0, b, h, 0, b, true, false); // left
+  mirror(w - b, 0, b, h, b + w, b, true, false); // right
+  mirror(0, 0, b, b, 0, 0, true, true); // corners
+  mirror(w - b, 0, b, b, b + w, 0, true, true);
+  mirror(0, h - b, b, b, 0, b + h, true, true);
+  mirror(w - b, h - b, b, b, b + w, b + h, true, true);
+  return page;
 }
