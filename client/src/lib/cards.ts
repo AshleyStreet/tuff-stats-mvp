@@ -107,18 +107,10 @@ export function normalizeCardName(value: string): string {
   return value.replace(/\s+/g, " ").trimStart().slice(0, MAX_CARD_NAME_LENGTH);
 }
 
-export const CARDS_PER_PAGE = 9;
-
 export function splitPlayerName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return { first: "", last: parts[0] ?? name };
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
-}
-
-export function chunkCards<T>(items: T[], size = CARDS_PER_PAGE): T[][] {
-  const pages: T[][] = [];
-  for (let i = 0; i < items.length; i += size) pages.push(items.slice(i, i + size));
-  return pages;
 }
 
 export function toTradingCard(
