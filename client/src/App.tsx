@@ -645,7 +645,7 @@ export default function App() {
                 <>
                   <h1>Trading cards</h1>
                   <p>
-                    {players.length} cards · 2.5&quot; × 3.5&quot; · 1/8&quot; bleed · one card per PDF page · back as its own PDF
+                    {players.length} cards · 2.5&quot; × 3.5&quot; · one card per letter page · back as its own PDF · print at 100%
                     {team ? ` · ${team}` : search ? ` · “${search}”` : ""}
                   </p>
                 </>
@@ -704,7 +704,7 @@ export default function App() {
                   type="button"
                   className="print-action"
                   disabled={Boolean(pdfCards)}
-                  title="One card per page at real size (2.5 × 3.5 in) with 1/8 in bleed, for a print shop."
+                  title="One card per letter page at real size (2.5 × 3.5 in), with bleed and crop marks. Print at 100% / actual size."
                   onClick={() => requestPdf(sheetForPlayers(players), { ...pdfCtx, source: "bulk" }, team || league.name)}
                 >
                   <FileDown size={15} />
@@ -718,7 +718,7 @@ export default function App() {
                   type="button"
                   className="print-action"
                   disabled={Boolean(pdfCards)}
-                  title="The card back on its own page (2.5 × 3.5 in with 1/8 in bleed), to print behind every front."
+                  title="The card back on its own letter page, lined up to print behind every front."
                   onClick={() =>
                     requestPdf(
                       sheetForPlayers(players.slice(0, 1)),

@@ -189,18 +189,26 @@ function triggerDownload(href: string, filename: string) {
 }
 
 /**
- * Print-shop pages: one card per page with 1/8 in of bleed on every side, so a page is
- * 2.75 × 3.75 in around the 2.5 × 3.5 in card. The trim is marked with a TrimBox for the
- * shop's cutting software.
+ * Print-shop pages: one card per US Letter page, centred at real size with 1/8 in of bleed
+ * and crop marks. A letter page opens and prints at the right size anywhere (a card-sized
+ * page gets blown up to fit), and with one card per sheet the back file lines up behind every
+ * front when printed double-sided. TrimBox and BleedBox mark the card for the shop's software.
  */
+const SHEET_WIDTH_IN = 8.5;
+const SHEET_HEIGHT_IN = 11;
 const BLEED_IN = 0.125;
-const PAGE_WIDTH_IN = PRINT_TRIM_WIDTH_IN + 2 * BLEED_IN;
-const PAGE_HEIGHT_IN = PRINT_TRIM_HEIGHT_IN + 2 * BLEED_IN;
+const TRIM_LEFT_IN = (SHEET_WIDTH_IN - PRINT_TRIM_WIDTH_IN) / 2;
+const TRIM_TOP_IN = (SHEET_HEIGHT_IN - PRINT_TRIM_HEIGHT_IN) / 2;
+/** Crop marks start clear of the bleed so a cut along them never leaves a stray line on the card. */
+const CROP_MARK_GAP_IN = BLEED_IN + 0.06;
+const CROP_MARK_LENGTH_IN = 0.3;
+const CROP_MARK_WIDTH_IN = 0.006;
 const POINTS_PER_IN = 72;
 
 /**
- * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), one per page
- * with bleed, rendered at 300 DPI. Pass the card backs on their own for a separate back PDF.
+ * Cards at their real size (2.5" × 3.5", the same as Magic or Pokémon cards), one per letter
+ * page with bleed and crop marks, rendered at 300 DPI. Print at 100% / "Actual size". Pass the
+ * card backs on their own for a separate back PDF.
  */
 export async function downloadCardsPdf(
   nodes: HTMLElement[],
@@ -210,17 +218,26 @@ export async function downloadCardsPdf(
   if (!nodes.length) return;
   try {
     const { jsPDF } = await import("jspdf");
-    const format = [PAGE_WIDTH_IN, PAGE_HEIGHT_IN];
-    const doc = new jsPDF({ unit: "in", format, orientation: "portrait", compress: true });
+    const doc = new jsPDF({ unit: "in", format: "letter", orientation: "portrait", compress: true });
     doc.setProperties({ title: filename.replace(/\.pdf$/i, ""), creator: "AfterWhistle" });
 
     // Embedding the page's fonts is the slow part of each capture, and it's the same for every card.
     const fonts: { css?: string } = {};
     for (const [index, node] of nodes.entries()) {
-      if (index > 0) doc.addPage(format, "portrait");
-      markTrim(doc);
+      if (index > 0) doc.addPage("letter", "portrait");
+      markCardBoxes(doc);
+      drawCropMarks(doc);
       const page = withBleed(await renderCard(node, fonts));
-      doc.addImage(page.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, PAGE_WIDTH_IN, PAGE_HEIGHT_IN, undefined, "NONE");
+      doc.addImage(
+        page.toDataURL("image/jpeg", 0.95),
+        "JPEG",
+        TRIM_LEFT_IN - BLEED_IN,
+        TRIM_TOP_IN - BLEED_IN,
+        PRINT_TRIM_WIDTH_IN + 2 * BLEED_IN,
+        PRINT_TRIM_HEIGHT_IN + 2 * BLEED_IN,
+        undefined,
+        "NONE"
+      );
       onProgress?.(index + 1, nodes.length);
     }
 
@@ -230,17 +247,43 @@ export async function downloadCardsPdf(
   }
 }
 
-/** Set the page's TrimBox (in points) to the card's edges, inside the bleed. */
-function markTrim(doc: import("jspdf").jsPDF) {
+type PdfBox = { bottomLeftX: number; bottomLeftY: number; topRightX: number; topRightY: number };
+
+/** Set the page's TrimBox to the card's edges and BleedBox to the bleed around it, in points. */
+function markCardBoxes(doc: import("jspdf").jsPDF) {
   const { pageContext } = doc.getCurrentPageInfo() as unknown as {
-    pageContext: { trimBox: { bottomLeftX: number; bottomLeftY: number; topRightX: number; topRightY: number } | null };
+    pageContext: { trimBox: PdfBox | null; bleedBox: PdfBox | null };
   };
-  pageContext.trimBox = {
-    bottomLeftX: BLEED_IN * POINTS_PER_IN,
-    bottomLeftY: BLEED_IN * POINTS_PER_IN,
-    topRightX: (BLEED_IN + PRINT_TRIM_WIDTH_IN) * POINTS_PER_IN,
-    topRightY: (BLEED_IN + PRINT_TRIM_HEIGHT_IN) * POINTS_PER_IN
-  };
+  // PDF boxes run from the bottom-left corner; the card is centred, so bottom margin = top margin.
+  const box = (outset: number): PdfBox => ({
+    bottomLeftX: (TRIM_LEFT_IN - outset) * POINTS_PER_IN,
+    bottomLeftY: (TRIM_TOP_IN - outset) * POINTS_PER_IN,
+    topRightX: (TRIM_LEFT_IN + PRINT_TRIM_WIDTH_IN + outset) * POINTS_PER_IN,
+    topRightY: (TRIM_TOP_IN + PRINT_TRIM_HEIGHT_IN + outset) * POINTS_PER_IN
+  });
+  pageContext.trimBox = box(0);
+  pageContext.bleedBox = box(BLEED_IN);
+}
+
+/** Short lines outside each corner, lined up with the card's trim edges. */
+function drawCropMarks(doc: import("jspdf").jsPDF) {
+  const left = TRIM_LEFT_IN;
+  const right = TRIM_LEFT_IN + PRINT_TRIM_WIDTH_IN;
+  const top = TRIM_TOP_IN;
+  const bottom = TRIM_TOP_IN + PRINT_TRIM_HEIGHT_IN;
+  const near = CROP_MARK_GAP_IN;
+  const far = CROP_MARK_GAP_IN + CROP_MARK_LENGTH_IN;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(CROP_MARK_WIDTH_IN);
+
+  for (const x of [left, right]) {
+    doc.line(x, top - far, x, top - near);
+    doc.line(x, bottom + near, x, bottom + far);
+  }
+  for (const y of [top, bottom]) {
+    doc.line(left - far, y, left - near, y);
+    doc.line(right + near, y, right + far, y);
+  }
 }
 
 function renderCard(node: HTMLElement, fonts: { css?: string }) {
